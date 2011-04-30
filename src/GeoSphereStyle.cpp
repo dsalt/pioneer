@@ -694,12 +694,13 @@ void GeoSphereStyle::InitFractalType(MTRand &rand)
 			//SetFracDef(&m_fracdef[9], m_maxHeightInMeters*0.1, 100, rand, 10.0);
 			// adds bumps to the landscape
 			SetFracDef(&m_fracdef[9], height*0.0025, rand.Double(1,100), rand, 10.0);
+			break;
 		}
 	}
 
 // We set some fracdefs here for colours if we need them:
 	switch (m_colorType) {
-		case COLOR_NONE:
+		case COLOR_NONE: break;
 		case COLOR_GG_JUPITER: 
 			{
 				// spots
@@ -723,6 +724,8 @@ void GeoSphereStyle::InitFractalType(MTRand &rand)
 		case COLOR_EARTHLIKE: 
 			{
 				// crappy water
+				// setting fracdef settings here will over-ride the ones in the terrain, be careful.
+				// But with clever use we could create a lot more variation for each terrain.
 				//double height = m_maxHeightInMeters*0.5;
 				//SetFracDef(&m_fracdef[3], m_maxHeightInMeters, 1e8, rand, 50.0);
 				//SetFracDef(&m_fracdef[2], m_maxHeightInMeters, 10, rand, 10.0);
