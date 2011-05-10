@@ -281,7 +281,7 @@ void WorldView::DrawBgStars() //This is the background starfield
 		seed = (Pi::currentSystem->m_seed);
 	}
 	// Slight colour variation to stars based on seed
-	MTRand rand = seed;
+	MTRand rand(seed);
 	if (!m_haveStars) {
 	//seed = (Pi::currentSystem->m_seed);
 	for (int i=0; i<BG_STAR_MAX; i++) {
