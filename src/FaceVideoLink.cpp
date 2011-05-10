@@ -15,7 +15,7 @@
 #define MAX_CLOTHES     20
 #define MAX_ACCESSORIES 3
 
-#define MAX_BACKGROUND 12
+#define MAX_BACKGROUND 13
 
 static void _blit_image(SDL_Surface *s, const char *filename, int yoff)
 {
@@ -72,42 +72,42 @@ FaceVideoLink::FaceVideoLink(float w, float h, int flags, unsigned long seed) : 
 	SDL_Surface *s = SDL_CreateRGBSurface(SDL_SWSURFACE, FACE_WIDTH, FACE_HEIGHT, 32, 0xff, 0xff00, 0xff0000, 0xff000000);
 
 	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/backgrounds/background_%d.png", background);
-	printf("%s\n", filename);
+	//printf("%s\n", filename);
 	_blit_image(s, filename, 0);
 
 	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/head/head_%d_%d.png", race, gender, head);
-	printf("%s\n", filename);
+	//printf("%s\n", filename);
 	_blit_image(s, filename, 0);
 
 	if (!(flags & ARMOUR)) {
-		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/clothes/cloth_%d.png", clothes);
-		printf("%s\n", filename);
+		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/clothes/cloth_%d_%d.png", race, gender, clothes);
+		//printf("%s\n", filename);
 		_blit_image(s, filename, 135);
 	}
 
 	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/eyes/eyes_%d_%d.png", race, gender, eyes);
-	printf("%s\n", filename);
+	//printf("%s\n", filename);
 	_blit_image(s, filename, 42);
 
 	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/nose/nose_%d_%d.png", race, gender, nose);
-	printf("%s\n", filename);
+	//printf("%s\n", filename);
 	_blit_image(s, filename, 89);
 
 	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/mouth/mouth_%d_%d.png", race, gender, mouth);
-	printf("%s\n", filename);
+	//printf("%s\n", filename);
 	_blit_image(s, filename, 155);
 
 	if (!(flags & ARMOUR)) {
 		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/hair/hair_%d_%d.png", race, gender, hair);
-		printf("%s\n", filename);
+		//printf("%s\n", filename);
 		_blit_image(s, filename, 0);
 
 		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/accessories/acc_%d.png", accessories);
-		printf("%s\n", filename);
+		//printf("%s\n", filename);
 		_blit_image(s, filename, -10);
 	}
 	else
-		_blit_image(s, PIONEER_DATA_DIR "/facegen/clothes/armour.png", 0);
+		_blit_image(s, PIONEER_DATA_DIR "/facegen/armour.png", 0);
 
 	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, &m_tex);

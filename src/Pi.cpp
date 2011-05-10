@@ -1,3 +1,6 @@
+#define __STDC_FORMAT_MACROS 1
+#include <inttypes.h>
+
 #include "libs.h"
 #include "Pi.h"
 #include "Gui.h"
@@ -85,13 +88,16 @@ LuaEventQueue<Ship,Body> Pi::luaOnShipHit("onShipHit");
 LuaEventQueue<Ship,Body> Pi::luaOnShipCollided("onShipCollided");
 LuaEventQueue<Ship,SpaceStation> Pi::luaOnShipDocked("onShipDocked");
 LuaEventQueue<Ship,SpaceStation> Pi::luaOnShipUndocked("onShipUndocked");
+LuaEventQueue<Ship> Pi::luaOnShipAlertChanged("onShipAlertChanged");
 LuaEventQueue<Ship,CargoBody> Pi::luaOnJettison("onJettison");
+LuaEventQueue<Ship> Pi::luaOnAICompleted("onAICompleted");
 LuaEventQueue<SpaceStation> Pi::luaOnCreateBB("onCreateBB");
 LuaEventQueue<SpaceStation> Pi::luaOnUpdateBB("onUpdateBB");
 int Pi::keyModState;
 char Pi::keyState[SDLK_LAST];
 char Pi::mouseButton[6];
 int Pi::mouseMotion[2];
+bool Pi::doingMouseGrab = false;
 Player *Pi::player;
 View *Pi::currentView;
 WorldView *Pi::worldView;
@@ -203,7 +209,9 @@ static void LuaInit()
 	Pi::luaOnShipCollided.RegisterEventQueue();
 	Pi::luaOnShipDocked.RegisterEventQueue();
 	Pi::luaOnShipUndocked.RegisterEventQueue();
+	Pi::luaOnShipAlertChanged.RegisterEventQueue();
 	Pi::luaOnJettison.RegisterEventQueue();
+	Pi::luaOnAICompleted.RegisterEventQueue();
 	Pi::luaOnCreateBB.RegisterEventQueue();
 	Pi::luaOnUpdateBB.RegisterEventQueue();
 
@@ -230,7 +238,9 @@ static void LuaInitGame() {
 	Pi::luaOnShipCollided.ClearEvents();
 	Pi::luaOnShipDocked.ClearEvents();
 	Pi::luaOnShipUndocked.ClearEvents();
+	Pi::luaOnShipAlertChanged.ClearEvents();
 	Pi::luaOnJettison.ClearEvents();
+	Pi::luaOnAICompleted.ClearEvents();
 	Pi::luaOnCreateBB.ClearEvents();
 	Pi::luaOnUpdateBB.ClearEvents();
 }
@@ -363,6 +373,7 @@ void Pi::Init()
 	}
 	draw_progress(1.0f);
 
+#if 0
 	// test code to produce list of ship stats
 
 	FILE *pStatFile = fopen("shipstat.csv","wt");
@@ -401,6 +412,7 @@ void Pi::Init()
 		}
 		fclose(pStatFile);
 	}
+#endif
 
 	gameMenuView = new GameMenuView();
 	config.Save();
@@ -777,8 +789,7 @@ void Pi::TombStoneLoop()
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Pi::HandleEvents();
-		SDL_ShowCursor(1);
-		SDL_WM_GrabInput(SDL_GRAB_OFF);
+		Pi::SetMouseGrab(false);
 
 		draw_tombstone(_time);
 		Render::PostProcess();
@@ -854,8 +865,8 @@ void Pi::StartGame()
 	cpan->ShowAll();
 	cpan->SetAlertState(Ship::ALERT_NONE);
 	OnPlayerChangeEquipment();
-	SetView(worldView);
 	Pi::isGameStarted = true;
+	SetView(worldView);
 	Pi::luaOnGameStart.Signal();
 }
 
@@ -933,8 +944,8 @@ void Pi::Start()
 		glLoadIdentity();
 		glClearColor(0,0,0,0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		SDL_ShowCursor(1);
-		SDL_WM_GrabInput(SDL_GRAB_OFF);
+
+		Pi::SetMouseGrab(false);
 
 		draw_intro(view, _time);
 		Render::PostProcess();
@@ -1150,15 +1161,8 @@ void Pi::MainLoop()
 		// detected. Gui::Draw wipes memory of label positions.
 		Pi::HandleEvents();
 		// hide cursor for ship control.
-		if (Pi::MouseButtonState(3)) {
-			SDL_ShowCursor(0);
-			SDL_WM_GrabInput(SDL_GRAB_ON);
-//			SDL_SetRelativeMouseMode(true);
-		} else {
-			SDL_ShowCursor(1);
-			SDL_WM_GrabInput(SDL_GRAB_OFF);
-//			SDL_SetRelativeMouseMode(false);
-		}
+
+		SetMouseGrab(Pi::MouseButtonState(3));
 
 		Render::PostProcess();
 		Gui::Draw();
@@ -1177,26 +1181,35 @@ void Pi::MainLoop()
 		//if (glGetError()) printf ("GL: %s\n", gluErrorString (glGetError ()));
 		
 		int timeAccel = Pi::requestedTimeAccelIdx;
-		if (Pi::player->GetFlightState() == Ship::FLYING) {
-			// check we aren't too near to objects for timeaccel //
-			for (std::list<Body*>::iterator i = Space::bodies.begin(); i != Space::bodies.end(); ++i) {
-				if ((*i) == Pi::player) continue;
-				if ((*i)->IsType(Object::HYPERSPACECLOUD)) continue;
-				
-				vector3d toBody = Pi::player->GetPosition() - (*i)->GetPositionRelTo(Pi::player->GetFrame());
-				double dist = toBody.Length();
-				double rad = (*i)->GetBoundingRadius();
+		if (Pi::player->GetFlightState() == Ship::FLYING && !Space::GetHyperspaceAnim()) {
 
-				if (dist < 1000.0) {
-					timeAccel = std::min(timeAccel, 1);
-				} else if (dist < std::min(rad+0.0001*AU, rad*1.1)) {
-					timeAccel = std::min(timeAccel, 2);
-				} else if (dist < std::min(rad+0.001*AU, rad*5.0)) {
-					timeAccel = std::min(timeAccel, 3);
-				} else if (dist < std::min(rad+0.01*AU,rad*10.0)) {
-					timeAccel = std::min(timeAccel, 4);
-				} else if (dist < std::min(rad+0.1*AU, rad*1000.0)) {
-					timeAccel = std::min(timeAccel, 5);
+			// special timeaccel lock rules while in alert
+			if (Pi::player->GetAlertState() == Ship::ALERT_SHIP_NEARBY)
+				timeAccel = std::min(timeAccel, 2);
+			else if (Pi::player->GetAlertState() == Ship::ALERT_SHIP_FIRING)
+				timeAccel = std::min(timeAccel, 1);
+
+			else {
+				// check we aren't too near to objects for timeaccel //
+				for (std::list<Body*>::iterator i = Space::bodies.begin(); i != Space::bodies.end(); ++i) {
+					if ((*i) == Pi::player) continue;
+					if ((*i)->IsType(Object::HYPERSPACECLOUD)) continue;
+				
+					vector3d toBody = Pi::player->GetPosition() - (*i)->GetPositionRelTo(Pi::player->GetFrame());
+					double dist = toBody.Length();
+					double rad = (*i)->GetBoundingRadius();
+
+					if (dist < 1000.0) {
+						timeAccel = std::min(timeAccel, 1);
+					} else if (dist < std::min(rad+0.0001*AU, rad*1.1)) {
+						timeAccel = std::min(timeAccel, 2);
+					} else if (dist < std::min(rad+0.001*AU, rad*5.0)) {
+						timeAccel = std::min(timeAccel, 3);
+					} else if (dist < std::min(rad+0.01*AU,rad*10.0)) {
+						timeAccel = std::min(timeAccel, 4);
+					} else if (dist < std::min(rad+0.1*AU, rad*1000.0)) {
+						timeAccel = std::min(timeAccel, 5);
+					}
 				}
 			}
 		}
@@ -1410,4 +1423,20 @@ float Pi::JoystickAxisState(int joystick, int axis) {
 		return 0;
 
 	return joysticks[joystick].axes[axis];
+}
+
+void Pi::SetMouseGrab(bool on)
+{
+	if (!doingMouseGrab && on) {
+		SDL_ShowCursor(0);
+		SDL_WM_GrabInput(SDL_GRAB_ON);
+//		SDL_SetRelativeMouseMode(true);
+		doingMouseGrab = true;
+	}
+	else if(doingMouseGrab && !on) {
+		SDL_ShowCursor(1);
+		SDL_WM_GrabInput(SDL_GRAB_OFF);
+//		SDL_SetRelativeMouseMode(false);
+		doingMouseGrab = false;
+	}
 }
