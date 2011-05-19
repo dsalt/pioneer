@@ -49,8 +49,11 @@ Pioneer includes the following third-party software:
   OOLua by Liam Devine
   Copyright (C) 2009-2010 Liam Devine
 
-  LIBERATION fonts
+  LIBERATION font
   Copyright (C) 2007 Red Hat, Inc
+
+  Titillium Text font
+  Copyright (C) 2007-2009 Academia di Belle Arte di Urbino - Campivisivi
 
 
 Pioneer also makes use of these fine projects. Thanks a lot!
