@@ -25,6 +25,7 @@ noinst_HEADERS = \
 	Frame.h \
 	GalacticView.h \
 	Galaxy.h \
+	GameConfig.h \
 	GameMenuView.h \
 	GenericChatForm.h \
 	GeoSphere.h \
@@ -59,7 +60,6 @@ noinst_HEADERS = \
 	HyperspaceCloud.h \
 	InfoView.h \
 	IniConfig.h \
-	GameConfig.h \
 	FontConfig.h \
 	KeyBindings.h \
 	LmrModel.h \
@@ -183,6 +183,7 @@ pioneer_SOURCES	= \
 	Frame.cpp \
 	GalacticView.cpp \
 	Galaxy.cpp \
+	GameConfig.cpp \
 	GameMenuView.cpp \
 	GenericChatForm.cpp \
 	GeoSphere.cpp \
@@ -190,7 +191,6 @@ pioneer_SOURCES	= \
 	HyperspaceCloud.cpp \
 	InfoView.cpp \
 	IniConfig.cpp \
-	GameConfig.cpp \
 	FontConfig.cpp \
 	KeyBindings.cpp \
 	LmrModel.cpp \
