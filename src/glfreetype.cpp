@@ -572,6 +572,8 @@ TextureFontFace::TextureFontFace(const std::string &config_filename) : m_config(
 	int a_width = m_config.Int("PixelWidth") / scale[0];
 	int a_height = m_config.Int("PixelHeight") / scale[1];
 
+	float advx_adjust = m_config.Float("AdvanceXAdjustment");
+
 	int err;
 	m_pixSize = a_height;
 	if (0 != (err = FT_New_Face(library, std::string(PIONEER_DATA_DIR "/fonts/" + filename_ttf).c_str(), 0, &m_face))) {
@@ -623,7 +625,7 @@ TextureFontFace::TextureFontFace(const std::string &config_filename) : m_config(
 		glyph.height = m_face->glyph->bitmap.rows / float(sz);
 		glyph.offx = m_face->glyph->bitmap_left;
 		glyph.offy = m_face->glyph->bitmap_top;
-		glyph.advx = float(m_face->glyph->advance.x) / 64.0;
+		glyph.advx = float(m_face->glyph->advance.x) / 64.0 + advx_adjust;
 		glyph.advy = float(m_face->glyph->advance.y) / 64.0;
 		m_glyphs[chr] = glyph;
 	}
