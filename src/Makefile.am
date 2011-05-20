@@ -22,6 +22,9 @@ noinst_HEADERS = \
 	DynamicBody.h \
 	EquipType.h \
 	FaceVideoLink.h \
+	Font.h \
+	FontConfig.h \
+	FontManager.h \
 	Frame.h \
 	GalacticView.h \
 	Galaxy.h \
@@ -60,7 +63,6 @@ noinst_HEADERS = \
 	HyperspaceCloud.h \
 	InfoView.h \
 	IniConfig.h \
-	FontConfig.h \
 	KeyBindings.h \
 	LmrModel.h \
 	LuaBody.h \
@@ -128,13 +130,14 @@ noinst_HEADERS = \
 	SysLoc.h \
 	SystemInfoView.h \
 	SystemView.h \
+	TextureFont.h \
+	VectorFont.h \
 	VideoLink.h \
 	View.h \
 	WorldView.h \
 	buildopts.h \
 	fixed.h \
 	gameconsts.h \
-	glfreetype.h \
 	libs.h \
 	matrix4x4.h \
 	mtrand.h \
@@ -180,6 +183,8 @@ pioneer_SOURCES	= \
 	DynamicBody.cpp \
 	EquipType.cpp \
 	FaceVideoLink.cpp \
+	Font.cpp \
+	FontManager.cpp \
 	Frame.cpp \
 	GalacticView.cpp \
 	Galaxy.cpp \
@@ -255,8 +260,9 @@ pioneer_SOURCES	= \
 	SysLoc.cpp \
 	SystemInfoView.cpp \
 	SystemView.cpp \
+	TextureFont.cpp \
+	VectorFont.cpp \
 	WorldView.cpp \
-	glfreetype.cpp \
 	main.cpp \
 	mtrand.cpp \
 	perlin.cpp \
@@ -270,14 +276,17 @@ pioneer_LDADD += lua/liblua.a
 endif
 
 modelviewer_SOURCES = \
+    Font.cpp \
+	FontConfig.cpp \
+	FontManager.cpp \
+	IniConfig.cpp \
 	LmrModel.cpp \
 	LuaModelViewer.cpp \
 	LuaUtils.cpp \
 	MyLuaMathTypes.cpp \
 	Render.cpp \
-	IniConfig.cpp \
-	FontConfig.cpp \
-	glfreetype.cpp \
+	TextureFont.cpp \
+	VectorFont.cpp \
 	perlin.cpp \
 	utils.cpp
 modelviewer_LDADD = collider/libcollider.a libgui.a $(MINGW_LIBS) \
