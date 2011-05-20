@@ -23,7 +23,17 @@ TextureFont *FontManager::GetTextureFont(const std::string &name)
 	if (i != m_textureFonts.end())
 		return (*i).second;
 
-	TextureFont *font = new TextureFont(*this, (PIONEER_DATA_DIR "/fonts/" + name + ".ini").c_str());
+	// try user dir then data dir
+	TextureFont *font = new TextureFont(*this, GetPiUserDir() + name + ".ini");
+	if (!font->IsValid()) {
+		delete font;
+		font = new TextureFont(*this, PIONEER_DATA_DIR "/fonts/" + name + ".ini");
+	}
+	if (!font->IsValid()) {
+		fprintf(stderr, "Failed to load anything for texture font \"%s\"\n - aborting", name.c_str());
+		abort();
+	}
+
 	m_textureFonts.insert( std::make_pair(name, font) );
 
 	return font;
@@ -35,7 +45,29 @@ VectorFont *FontManager::GetVectorFont(const std::string &name)
 	if (i != m_vectorFonts.end())
 		return (*i).second;
 
-	VectorFont *font = new VectorFont(*this, (PIONEER_DATA_DIR "/fonts/" + name + ".ttf").c_str());
+	// no dot after last slash (or start of string, if no slash) => append ".ttf"
+	size_t dot = name.find_last_of('.');
+#if defined(_WIN32)
+	size_t slash = name.find_last_of("\\/");
+#else
+	size_t slash = name.find_last_of('/');
+#endif
+	const char *const suffix = (dot <= slash) ? ".ttf" : "";
+
+	// try user dir, data dir then absolute
+	VectorFont *font = new VectorFont(*this, (GetPiUserDir() + name + suffix).c_str());
+	if (!font->IsValid()) {
+		delete font;
+		font = new VectorFont(*this, (PIONEER_DATA_DIR "/fonts/" + name + suffix).c_str());
+	}
+	if (!font->IsValid()) {
+		delete font;
+		font = new VectorFont(*this, (name + suffix).c_str()); // assume absolute path
+	}
+	if (!font->IsValid()) {
+		fprintf(stderr, "Failed to load anything for vector font \"%s\"\n - aborting", name.c_str());
+		abort();
+	}
 	m_vectorFonts.insert( std::make_pair(name, font) );
 
 	return font;

@@ -17,6 +17,8 @@
 
 void TextureFont::RenderGlyph(int chr, float x, float y)
 {
+	if (!valid) return;
+
 	glfglyph_t *glyph = &m_glyphs[chr];
 	glBindTexture(GL_TEXTURE_2D, glyph->tex);
 	const float ox = x + float(glyph->offx);
@@ -38,6 +40,8 @@ void TextureFont::RenderGlyph(int chr, float x, float y)
 
 void TextureFont::MeasureString(const char *str, float &w, float &h)
 {
+	if (!valid) return;
+
 	w = 0;
 	h = GetHeight();
 	float line_width = 0;
@@ -56,6 +60,8 @@ void TextureFont::MeasureString(const char *str, float &w, float &h)
 
 void TextureFont::RenderString(const char *str, float x, float y)
 {
+	if (!valid) return;
+
 	TEXTURE_FONT_ENTER;
 	float px = x;
 	float py = y;
@@ -80,6 +86,8 @@ void TextureFont::RenderString(const char *str, float x, float y)
 
 void TextureFont::RenderMarkup(const char *str, float x, float y)
 {
+	if (!valid) return;
+
 	TEXTURE_FONT_ENTER;
 	float px = x;
 	float py = y;
@@ -119,7 +127,7 @@ TextureFont::TextureFont(FontManager &fm, const std::string &config_filename) : 
 	std::string filename_ttf = m_config.String("FontFile");
 	if (filename_ttf.length() == 0) {
 		fprintf(stderr, "'%s' does not name a FontFile to use\n", config_filename.c_str());
-		abort();
+		return;
 	}
 
 	float scale[2];
@@ -132,9 +140,9 @@ TextureFont::TextureFont(FontManager &fm, const std::string &config_filename) : 
 
 	int err;
 	m_pixSize = a_height;
-	if (0 != (err = FT_New_Face(GetFontManager().GetFreeTypeLibrary(), std::string(PIONEER_DATA_DIR "/fonts/" + filename_ttf).c_str(), 0, &m_face))) {
+	if (0 != (err = FT_New_Face(GetFontManager().GetFreeTypeLibrary(), filename_ttf.c_str(), 0, &m_face))) {
 		fprintf(stderr, "Terrible error! Couldn't load '%s'; error %d.\n", filename_ttf.c_str(), err);
-		abort();
+		return;
 	}
 
 	FT_Set_Pixel_Sizes(m_face, a_width, a_height);
@@ -191,4 +199,6 @@ TextureFont::TextureFont(FontManager &fm, const std::string &config_filename) : 
 	m_height = float(a_height);
 	m_width = float(a_width);
 	m_descender = -float(m_face->descender) / 64.0;
+
+	valid = true;
 }

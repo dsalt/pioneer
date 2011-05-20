@@ -282,6 +282,8 @@ void CALLBACK combineCallback(GLdouble coords[3],
 
 void VectorFont::RenderGlyph(int chr)
 {
+	if (!valid) return;
+
 	glEnableClientState (GL_VERTEX_ARRAY);
 	glDisableClientState (GL_NORMAL_ARRAY);
 
@@ -292,6 +294,8 @@ void VectorFont::RenderGlyph(int chr)
 
 void VectorFont::MeasureString(const char *str, float &w, float &h)
 {
+	if (!valid) return;
+
 	w = 0;
 	h = GetHeight();
 	float line_width = 0;
@@ -309,6 +313,8 @@ void VectorFont::MeasureString(const char *str, float &w, float &h)
 
 void VectorFont::RenderString(const char *str)
 {
+	if (!valid) return;
+
 	glPushMatrix();
 	for (unsigned int i=0; i<strlen(str); i++) {
 		if (str[i] == '\n') {
@@ -328,6 +334,8 @@ void VectorFont::GetStringGeometry(const char *str,
 		void (*index_callback)(int num, Uint16 *vals),
 		void (*vertex_callback)(int num, float offsetX, float offsetY, float *vals))
 {
+	if (!valid) return;
+
 	float offX, offY;
 	offX = offY = 0;
 	for (unsigned int i=0; i<strlen(str); i++) {
@@ -348,6 +356,8 @@ void VectorFont::GetStringGeometry(const char *str,
 // 'Markup' indeed. #rgb hex is change color, no sensible escape
 void VectorFont::RenderMarkup(const char *str)
 {
+	if (!valid) return;
+
 	glPushMatrix();
 	int len = strlen(str);
 	for (int i=0; i<len; i++) {
@@ -447,5 +457,6 @@ VectorFont::VectorFont(FontManager &fm, const char *filename_ttf) : Font(fm)
 		
 		m_height = m_glyphs['M'].advy;
 		m_width = m_glyphs['M'].advx;
+		valid = true;
 	}
 }
