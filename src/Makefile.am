@@ -276,7 +276,7 @@ pioneer_LDADD += lua/liblua.a
 endif
 
 modelviewer_SOURCES = \
-    Font.cpp \
+	Font.cpp \
 	FontConfig.cpp \
 	FontManager.cpp \
 	IniConfig.cpp \

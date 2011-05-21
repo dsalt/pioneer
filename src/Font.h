@@ -9,7 +9,7 @@ public:
 	bool IsValid() const { return valid; }
 
 protected:
-	Font(FontManager &fm) : m_fontManager(fm), valid(false) {}
+	Font(FontManager &fm) : valid(false), m_fontManager(fm) {}
 
 	FontManager &GetFontManager() { return m_fontManager; }
 

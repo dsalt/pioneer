@@ -53,6 +53,11 @@ Pioneer includes the following third-party software:
 
   LIBERATION font
   Copyright (C) 2007 Red Hat, Inc
+  Licensed under the GNU GPL version 2 (see ttf-liberation.COPYING.txt)
+
+  Titillium Text font
+  Copyright (C) 2007-2009 Academia di Belle Arte di Urbino - Campivisivi
+  Licensed under the SIL Open Font Licence v1.1 (see titillium.COPYING.txt)
 
   Titillium Text font
   Copyright (C) 2007-2009 Academia di Belle Arte di Urbino - Campivisivi

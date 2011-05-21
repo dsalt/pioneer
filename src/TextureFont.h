@@ -25,14 +25,13 @@ public:
 	const glfglyph_t &GetGlyph(int ch) { return m_glyphs[ch]; }
 
 private:
+	FontConfig m_config;
 	void RenderGlyph(int chr, float x, float y);
 	float m_height;
 	float m_width;
 	float m_descender;
 	int m_texSize, m_pixSize;
 	std::map<int,glfglyph_t> m_glyphs;
-
-	FontConfig m_config;
 };
 
 #endif
