@@ -153,7 +153,7 @@ TextureFont::TextureFont(FontManager &fm, const std::string &config_filename) : 
 
 	int err;
 	m_pixSize = a_height;
-	if (0 != (err = FT_New_Face(GetFontManager().GetFreeTypeLibrary(), filename_ttf.c_str(), 0, &m_face))) {
+	if (0 != (err = LoadFontFile(filename_ttf.c_str()))) {
 		fprintf(stderr, "Terrible error! Couldn't load '%s'; error %d.\n", filename_ttf.c_str(), err);
 		return;
 	}

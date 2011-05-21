@@ -23,14 +23,18 @@ TextureFont *FontManager::GetTextureFont(const std::string &name)
 	if (i != m_textureFonts.end())
 		return (*i).second;
 
-	// try user dir then data dir
+	// try user dir, data dir then absolute
 	TextureFont *font = new TextureFont(*this, GetPiUserDir() + name + ".ini");
 	if (!font->IsValid()) {
 		delete font;
 		font = new TextureFont(*this, PIONEER_DATA_DIR "/fonts/" + name + ".ini");
 	}
 	if (!font->IsValid()) {
-		fprintf(stderr, "Failed to load anything for texture font \"%s\"\n - aborting", name.c_str());
+		delete font;
+		font = new TextureFont(*this, name + ".ini"); // assume absolute path
+	}
+	if (!font->IsValid()) {
+		fprintf(stderr, "Failed to load anything for texture font \"%s\" - aborting\n", name.c_str());
 		abort();
 	}
 
@@ -56,7 +60,7 @@ VectorFont *FontManager::GetVectorFont(const std::string &name)
 		font = new VectorFont(*this, name + ".ini"); // assume absolute path
 	}
 	if (!font->IsValid()) {
-		fprintf(stderr, "Failed to load anything for vector font \"%s\"\n - aborting", name.c_str());
+		fprintf(stderr, "Failed to load anything for vector font \"%s\" - aborting\n", name.c_str());
 		abort();
 	}
 	m_vectorFonts.insert( std::make_pair(name, font) );

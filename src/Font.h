@@ -15,6 +15,8 @@ protected:
 	FontManager &GetFontManager() { return m_fontManager; }
 	FontConfig &GetConfig() { return m_config; }
 
+	int LoadFontFile(const std::string &name); // leafname or full pathname
+
 	FT_Face m_face;
 	bool valid;
 
