@@ -395,7 +395,7 @@ VectorFont::VectorFont(FontManager &fm, const std::string &config_filename) : Fo
 	FT_F26Dot6 points = FT_F26Dot6(GetConfig().Float("PointSize") * 64.0);
 
 	int err;
-	if (0 != (err = FT_New_Face(GetFontManager().GetFreeTypeLibrary(), std::string(PIONEER_DATA_DIR "/fonts/" + filename_ttf).c_str(), 0, &m_face))) {
+	if (0 != (err = FT_New_Face(GetFontManager().GetFreeTypeLibrary(), GetPiDataFile(filename_ttf, "fonts").c_str(), 0, &m_face))) {
 		fprintf(stderr, "Terrible error! Couldn't load '%s'; error %d.\n", filename_ttf.c_str(), err);
 	} else {
 		FT_Set_Char_Size(m_face, points, 0, 72, 0);

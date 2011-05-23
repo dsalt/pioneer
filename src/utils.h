@@ -29,7 +29,7 @@ void Warning(const char *format, ...) __attribute((format(printf,1,2)));
 void SilentWarning(const char *format, ...) __attribute((format(printf,1,2)));
 
 std::string GetPiUserDir(const std::string &subdir = "");
-std::string GetPiDataDir();
+std::string GetPiDataFile(const std::string &name, const std::string &path = "");
 
 struct MissingFileException {};
 

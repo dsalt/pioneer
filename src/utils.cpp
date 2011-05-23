@@ -96,9 +96,20 @@ std::string GetPiUserDir(const std::string &subdir)
 
 }
 
-std::string PiGetDataDir()
+std::string GetPiDataFile(const std::string &name, const std::string &path)
 {
-	return PIONEER_DATA_DIR + std::string("/");
+	struct stat st;
+	std::string fullpath;
+
+	fullpath = GetPiUserDir() + "data/" + path + "/" + name;
+	if (stat(fullpath.c_str(), &st) == 0)
+		return fullpath;
+
+	fullpath = PIONEER_DATA_DIR "/" + path + "/" + name;
+	if (stat(fullpath.c_str(), &st) == 0)
+		return fullpath;
+
+	return name; // default, whether or not it exists
 }
 
 FILE *fopen_or_die(const char *filename, const char *mode)
