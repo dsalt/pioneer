@@ -9,7 +9,7 @@ class RadioGroup;
 namespace Gui {
 	class ImageRadioButton: public RadioButton {
 	public:
-		ImageRadioButton(RadioGroup *, const char *img_normal, const char *img_pressed);
+		ImageRadioButton(RadioGroup *, const std::string &img_normal, const std::string &img_pressed);
 		virtual ~ImageRadioButton();
 		virtual void Draw();
 		virtual void GetSizeRequested(float size[2]);

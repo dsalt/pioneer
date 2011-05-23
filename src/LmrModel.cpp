@@ -579,9 +579,7 @@ public:
 	
 	void PushBillboards(const char *texname, const float size, const vector3f &color, const int numPoints, const vector3f *points)
 	{
-		char buf[256];
-		snprintf(buf, sizeof(buf), PIONEER_DATA_DIR"/textures/%s", texname);
-		GLuint tex = util_load_tex_rgba(buf);
+		GLuint tex = util_load_tex_rgba(GetPiDataFile(texname, "textures"));
 
 		if (curOp.type) m_ops.push_back(curOp);
 		curOp.type = OP_DRAW_BILLBOARDS;
@@ -1676,9 +1674,7 @@ namespace ModelFuncs {
 			std::string dir = luaL_checkstring(L, -1);
 			lua_pop(L, 1);
 
-			const char *texfile = luaL_checkstring(L, 1);
-			std::string t = dir + std::string("/") + texfile;
-			GLuint texture = util_load_tex_rgba(t.c_str());
+			GLuint texture = util_load_tex_rgba(dir + std::string("/") + luaL_checkstring(L, 1));
 			if (nargs == 4) {
 				// texfile, pos, uaxis, vaxis
 				vector3f pos = *MyLuaVec::checkVec(L, 2);
@@ -2615,8 +2611,7 @@ namespace ObjLoader {
 				if (1 == sscanf(buf, "usemtl %s", mat_name)) {
 					if ( mtl_map.find(mat_name) != mtl_map.end() ) {
 						try {
-							char texfile[256];
-							snprintf(texfile, sizeof(texfile), "%s/%s", curdir.c_str(), mtl_map[mat_name].c_str());
+							std::string texfile = curdir + "/" + mtl_map[mat_name];
 							texture = util_load_tex_rgba(texfile);
 						} catch (LmrUnknownMaterial) {
 							printf("Warning: Missing material %s (%s) in %s\n", mtl_map[mat_name].c_str(), mat_name, obj_name);

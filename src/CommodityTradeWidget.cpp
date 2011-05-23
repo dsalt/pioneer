@@ -50,7 +50,7 @@ void CommodityTradeWidget::ShowAll()
 		while ((imgbad = imgname.find(' ')) != std::string::npos) {
 			imgname.replace(imgbad, 1, "_");
 		}
-		Gui::Image *img = new Gui::Image((PIONEER_DATA_DIR "/icons/goods/" + imgname + ".png").c_str() );
+		Gui::Image *img = new Gui::Image(GetPiDataFile(imgname + ".png", "icons/goods") );
 
 		innerbox->Add(img,0, num*YSEP);
 		Gui::Label *l = new Gui::Label(EquipType::types[i].name);

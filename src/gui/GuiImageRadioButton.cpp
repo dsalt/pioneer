@@ -4,7 +4,7 @@
 
 namespace Gui {
 
-ImageRadioButton::ImageRadioButton(RadioGroup *g, const char *img_normal, const char *img_pressed): RadioButton(g)
+ImageRadioButton::ImageRadioButton(RadioGroup *g, const std::string &img_normal, const std::string &img_pressed): RadioButton(g)
 {
 	m_imgNormal = new Image(img_normal);
 	m_imgPressed = new Image(img_pressed);

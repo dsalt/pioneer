@@ -64,25 +64,25 @@ WorldView::WorldView(): View()
 
 	m_wheelsButton = new Gui::MultiStateImageButton();
 	m_wheelsButton->SetShortcut(SDLK_F6, KMOD_NONE);
-	m_wheelsButton->AddState(0, PIONEER_DATA_DIR "/icons/wheels_up.png", "Wheels are up");
-	m_wheelsButton->AddState(1, PIONEER_DATA_DIR "/icons/wheels_down.png", "Wheels are down");
+	m_wheelsButton->AddState(0, GetPiDataFile("wheels_up.png", "icons"), "Wheels are up");
+	m_wheelsButton->AddState(1, GetPiDataFile("wheels_down.png", "icons"), "Wheels are down");
 	m_wheelsButton->onClick.connect(sigc::mem_fun(this, &WorldView::OnChangeWheelsState));
 	m_rightButtonBar->Add(m_wheelsButton, 34, 2);
 
 	Gui::MultiStateImageButton *labels_button = new Gui::MultiStateImageButton();
 	labels_button->SetShortcut(SDLK_F8, KMOD_NONE);
-	labels_button->AddState(1, PIONEER_DATA_DIR "/icons/labels_on.png", "Object labels are on");
-	labels_button->AddState(0, PIONEER_DATA_DIR "/icons/labels_off.png", "Object labels are off");
+	labels_button->AddState(1, GetPiDataFile("labels_on.png", "icons"), "Object labels are on");
+	labels_button->AddState(0, GetPiDataFile("labels_off.png", "icons"), "Object labels are off");
 	labels_button->onClick.connect(sigc::mem_fun(this, &WorldView::OnChangeLabelsState));
 	m_rightButtonBar->Add(labels_button, 98, 2);
 
-	m_hyperspaceButton = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/hyperspace_f8.png");
+	m_hyperspaceButton = new Gui::ImageButton(GetPiDataFile("hyperspace_f8.png", "icons"));
 	m_hyperspaceButton->SetShortcut(SDLK_F7, KMOD_NONE);
 	m_hyperspaceButton->SetToolTip("Hyperspace Jump");
 	m_hyperspaceButton->onClick.connect(sigc::mem_fun(this, &WorldView::OnClickHyperspace));
 	m_rightButtonBar->Add(m_hyperspaceButton, 66, 2);
 
-	m_launchButton = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/blastoff.png");
+	m_launchButton = new Gui::ImageButton(GetPiDataFile("blastoff.png", "icons"));
 	m_launchButton->SetShortcut(SDLK_F5, KMOD_NONE);
 	m_launchButton->SetToolTip("Takeoff");
 	m_launchButton->onClick.connect(sigc::mem_fun(this, &WorldView::OnClickBlastoff));
@@ -90,9 +90,9 @@ WorldView::WorldView(): View()
 
 	m_flightControlButton = new Gui::MultiStateImageButton();
 	m_flightControlButton->SetShortcut(SDLK_F5, KMOD_NONE);
-	m_flightControlButton->AddState(Player::CONTROL_MANUAL, PIONEER_DATA_DIR "/icons/manual_control.png", "Manual control");
-	m_flightControlButton->AddState(Player::CONTROL_FIXSPEED, PIONEER_DATA_DIR "/icons/manual_control.png", "Computer speed control");
-	m_flightControlButton->AddState(Player::CONTROL_AUTOPILOT, PIONEER_DATA_DIR "/icons/autopilot.png", "Autopilot on");
+	m_flightControlButton->AddState(Player::CONTROL_MANUAL, GetPiDataFile("manual_control.png", "icons"), "Manual control");
+	m_flightControlButton->AddState(Player::CONTROL_FIXSPEED, GetPiDataFile("manual_control.png", "icons"), "Computer speed control");
+	m_flightControlButton->AddState(Player::CONTROL_AUTOPILOT, GetPiDataFile("autopilot.png", "icons"), "Autopilot on");
 	m_flightControlButton->onClick.connect(sigc::mem_fun(this, &WorldView::OnChangeFlightState));
 	m_rightButtonBar->Add(m_flightControlButton, 2, 2);
 

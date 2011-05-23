@@ -239,17 +239,17 @@ void UseEquipWidget::UpdateEquip()
 			Gui::Button *b;
 			switch (t) {
 				case Equip::MISSILE_UNGUIDED:
-					b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/missile_unguided.png");
+					b = new Gui::ImageButton(GetPiDataFile("missile_unguided.png", "icons"));
 					break;
 				case Equip::MISSILE_GUIDED:
-					b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/missile_guided.png");
+					b = new Gui::ImageButton(GetPiDataFile("missile_guided.png", "icons"));
 					break;
 				case Equip::MISSILE_SMART:
-					b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/missile_smart.png");
+					b = new Gui::ImageButton(GetPiDataFile("missile_smart.png", "icons"));
 					break;
 				default:
 				case Equip::MISSILE_NAVAL:
-					b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/missile_naval.png");
+					b = new Gui::ImageButton(GetPiDataFile("missile_naval.png", "icons"));
 					break;
 			}
 			Add(b, spacing*i, 40);
@@ -262,8 +262,8 @@ void UseEquipWidget::UpdateEquip()
 		const Equip::Type t = Pi::player->m_equipment.Get(Equip::SLOT_ECM);
 		if (t != Equip::NONE) {
 			Gui::Button *b = 0;
-			if (t == Equip::ECM_BASIC) b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/ecm_basic.png");
-			else if (t == Equip::ECM_ADVANCED) b = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/ecm_advanced.png");
+			if (t == Equip::ECM_BASIC) b = new Gui::ImageButton(GetPiDataFile("ecm_basic.png", "icons"));
+			else if (t == Equip::ECM_ADVANCED) b = new Gui::ImageButton(GetPiDataFile("ecm_advanced.png", "icons"));
 			assert(b);
 
 			b->onClick.connect(sigc::mem_fun(Pi::player, &Ship::UseECM));
@@ -285,16 +285,16 @@ MultiFuncSelectorWidget::MultiFuncSelectorWidget(): Gui::Fixed(144, 17)
 	m_active = 0;
 	m_rg = new Gui::RadioGroup();
 	
-	m_buttons[0] = new Gui::ImageRadioButton(m_rg, PIONEER_DATA_DIR "/icons/multifunc_scanner.png", PIONEER_DATA_DIR "/icons/multifunc_scanner_on.png");
+	m_buttons[0] = new Gui::ImageRadioButton(m_rg, GetPiDataFile("multifunc_scanner.png", "icons"), GetPiDataFile("multifunc_scanner_on.png", "icons"));
 	m_buttons[0]->onSelect.connect(sigc::bind(sigc::mem_fun(this, &MultiFuncSelectorWidget::OnClickButton), MFUNC_SCANNER));
 	m_buttons[0]->SetShortcut(SDLK_F9, KMOD_NONE);
 	m_buttons[0]->SetSelected(true);
 
-	m_buttons[1] = new Gui::ImageRadioButton(m_rg, PIONEER_DATA_DIR "/icons/multifunc_equip.png", PIONEER_DATA_DIR "/icons/multifunc_equip_on.png");
+	m_buttons[1] = new Gui::ImageRadioButton(m_rg, GetPiDataFile("multifunc_equip.png", "icons"), GetPiDataFile("multifunc_equip_on.png", "icons"));
 	m_buttons[1]->onSelect.connect(sigc::bind(sigc::mem_fun(this, &MultiFuncSelectorWidget::OnClickButton), MFUNC_EQUIPMENT));
 	m_buttons[1]->SetShortcut(SDLK_F10, KMOD_NONE);
 
-	m_buttons[2] = new Gui::ImageRadioButton(m_rg, PIONEER_DATA_DIR "/icons/multifunc_msglog.png", PIONEER_DATA_DIR "/icons/multifunc_msglog_on.png");
+	m_buttons[2] = new Gui::ImageRadioButton(m_rg, GetPiDataFile("multifunc_msglog.png", "icons"), GetPiDataFile("multifunc_msglog_on.png", "icons"));
 	m_buttons[2]->onSelect.connect(sigc::bind(sigc::mem_fun(this, &MultiFuncSelectorWidget::OnClickButton), MFUNC_MSGLOG));
 	m_buttons[2]->SetShortcut(SDLK_F11, KMOD_NONE);
 

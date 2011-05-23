@@ -517,9 +517,9 @@ void PutPointSprites(int num, vector3f *v, float size, const float modulationCol
 // -------------- class Shader ----------------
 
 
-static __attribute((malloc)) char *load_file(const char *filename)
+static __attribute((malloc)) char *load_file(const char *leaf)
 {
-	FILE *f = fopen(filename, "rb");
+	FILE *f = fopen(GetPiDataFile(leaf, "shaders").c_str(), "rb");
 	if (!f) {
 		//printf("Could not open %s.\n", filename);
 		return 0;
@@ -564,11 +564,11 @@ bool Shader::Compile(const char *shader_name, const char *additional_defines)
 	static char *lib_fs = 0;
 	static char *lib_vs = 0;
 	static char *lib_all = 0;
-	if (!lib_fs) lib_fs = load_file(PIONEER_DATA_DIR"/shaders/_library.frag.glsl");
-	if (!lib_vs) lib_vs = load_file(PIONEER_DATA_DIR"/shaders/_library.vert.glsl");
-	if (!lib_all) lib_all = load_file(PIONEER_DATA_DIR"/shaders/_library.all.glsl");
+	if (!lib_fs) lib_fs = load_file("_library.frag.glsl");
+	if (!lib_vs) lib_vs = load_file("_library.vert.glsl");
+	if (!lib_all) lib_all = load_file("_library.all.glsl");
 
-	const std::string name = std::string(PIONEER_DATA_DIR"/shaders/") + shader_name;
+	std::string name = shader_name;
 	char *vscode = load_file((name + ".vert.glsl").c_str());
 	char *pscode = load_file((name + ".frag.glsl").c_str());
 	char *allcode = load_file((name + ".all.glsl").c_str());

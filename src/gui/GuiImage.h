@@ -7,7 +7,7 @@
 namespace Gui {
 	class Image: public Widget {
 	public:
-		Image(const char *filename);
+		Image(const std::string &filename);
 		virtual void Draw();
 		virtual ~Image();
 		virtual void GetSizeRequested(float size[2]);

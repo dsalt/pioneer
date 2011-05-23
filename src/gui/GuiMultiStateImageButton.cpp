@@ -73,17 +73,17 @@ void MultiStateImageButton::Draw()
 	}
 }
 
-void MultiStateImageButton::AddState(int state, const char *filename)
+void MultiStateImageButton::AddState(int state, const std::string &filename)
 {
 	AddState(state, filename, filename, "");
 }
 
-void MultiStateImageButton::AddState(int state, const char *filename, std::string tooltip)
+void MultiStateImageButton::AddState(int state, const std::string &filename, std::string tooltip)
 {
 	AddState(state, filename, filename, tooltip);
 }
 
-void MultiStateImageButton::AddState(int state, const char *inactiveImage, const char *activeImage, std::string tooltip)
+void MultiStateImageButton::AddState(int state, const std::string &inactiveImage, const std::string &activeImage, std::string tooltip)
 {
 	State s;
 	s.state = state;

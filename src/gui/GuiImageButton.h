@@ -9,13 +9,13 @@
 namespace Gui {
 	class ImageButton: public Button {
 	public:
-		ImageButton(const char *img_normal);
-		ImageButton(const char *img_normal, const char *img_pressed);
+		ImageButton(const std::string &img_normal);
+		ImageButton(const std::string &img_normal, const std::string &img_pressed);
 		virtual void Draw();
 		virtual ~ImageButton();
 		virtual void GetSizeRequested(float size[2]);
 	private:
-		void LoadImages(const char *img_normal, const char *img_pressed);
+		void LoadImages(const std::string *img_normal, const std::string *img_pressed);
 		Image *m_imgNormal;
 		Image *m_imgPressed;
 	};

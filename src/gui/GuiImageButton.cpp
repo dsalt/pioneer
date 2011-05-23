@@ -4,14 +4,14 @@
 
 namespace Gui {
 
-ImageButton::ImageButton(const char *img_normal): Button()
+ImageButton::ImageButton(const std::string &img_normal): Button()
 {
-	LoadImages(img_normal, NULL);
+	LoadImages(&img_normal, NULL);
 }
 
-ImageButton::ImageButton(const char *img_normal, const char *img_pressed): Button()
+ImageButton::ImageButton(const std::string &img_normal, const std::string &img_pressed): Button()
 {
-	LoadImages(img_normal, img_pressed);
+	LoadImages(&img_normal, &img_pressed);
 }
 
 ImageButton::~ImageButton()
@@ -20,14 +20,14 @@ ImageButton::~ImageButton()
 	if (m_imgPressed) delete m_imgPressed;
 }
 
-void ImageButton::LoadImages(const char *img_normal, const char *img_pressed)
+void ImageButton::LoadImages(const std::string *img_normal, const std::string *img_pressed)
 {
-	m_imgNormal = new Image(img_normal);
+	m_imgNormal = new Image(*img_normal);
 	float size[2];
 	m_imgNormal->GetSizeRequested(size);
 	SetSize(size[0], size[1]);
 
-	if (img_pressed) m_imgPressed = new Image(img_pressed);
+	if (img_pressed) m_imgPressed = new Image(*img_pressed);
 	else m_imgPressed = NULL;
 }
 

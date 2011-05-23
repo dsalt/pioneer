@@ -29,7 +29,8 @@ void Warning(const char *format, ...) __attribute((format(printf,1,2)));
 void SilentWarning(const char *format, ...) __attribute((format(printf,1,2)));
 
 std::string GetPiUserDir(const std::string &subdir = "");
-std::string GetPiDataFile(const std::string &name, const std::string &path = "");
+std::string GetPiDataFile(const std::string &name, const std::string &path);
+std::string GetPiDataFile(const std::string &pathname);
 
 struct MissingFileException {};
 
@@ -43,9 +44,10 @@ std::string format_distance(double dist);
 std::string format_money(Sint64 money);
 void strip_cr_lf(char *string);
 
-GLuint util_load_tex_rgba(const char *filename);
+GLuint util_load_tex_rgba(const std::string &filename);
 
 FILE *fopen_or_die(const char *filename, const char *mode);
+FILE *fopen_or_die(const std::string &filename, const char *mode);
 
 static inline std::string stringf(int maxlen, const char *format, ...)
 		__attribute((format(printf,2,3)));

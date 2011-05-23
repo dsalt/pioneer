@@ -1,4 +1,5 @@
 #include "FaceVideoLink.h"
+#include <stdarg.h>
 
 #define FACE_WIDTH  295
 #define FACE_HEIGHT 285
@@ -17,11 +18,21 @@
 
 #define MAX_BACKGROUND 13
 
-static void _blit_image(SDL_Surface *s, const char *filename, int yoff)
+static void __attribute((format(printf,3,4))) _blit_image(SDL_Surface *s, int yoff, const char *filepat, ...)
 {
-	SDL_Surface *is = IMG_Load(filename);
+	char filename[1024], *slash;
+	va_list ap;
+
+	va_start(ap, filepat);
+	vsnprintf(filename, sizeof(filename), filepat, ap);
+	slash = strrchr(filename, '/');
+	if (slash)
+		*slash++ = 0;
+	std::string fullname = GetPiDataFile(slash ? slash : filename, slash ? filename : "");
+
+	SDL_Surface *is = IMG_Load(fullname.c_str());
 	if (!is) {
-		fprintf(stderr, "FaceVideoLink: couldn't load '%s'\n", filename);
+		fprintf(stderr, "FaceVideoLink: couldn't load '%s'\n", fullname.c_str());
 		return;
 	}
 
@@ -72,47 +83,22 @@ FaceVideoLink::FaceVideoLink(float w, float h, int flags, unsigned long seed) : 
 
 	int background = rand.Int32(0,MAX_BACKGROUND);
 
-	char filename[1024];
-
 	SDL_Surface *s = SDL_CreateRGBSurface(SDL_SWSURFACE, ceil_pow2(FACE_WIDTH), ceil_pow2(FACE_HEIGHT), 32, 0xff, 0xff00, 0xff0000, 0xff000000);
 
-	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/backgrounds/background_%d.png", background);
-	//printf("%s\n", filename);
-	_blit_image(s, filename, 0);
-
-	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/head/head_%d_%d.png", race, gender, head);
-	//printf("%s\n", filename);
-	_blit_image(s, filename, 0);
-
+	_blit_image(s, 0, "facegen/backgrounds/background_%d.png", background);
+	_blit_image(s, 0, "facegen/race_%d/head/head_%d_%d.png", race, gender, head);
 	if (!(flags & ARMOUR)) {
-		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/clothes/cloth_%d_%d.png", race, gender, clothes);
-		//printf("%s\n", filename);
-		_blit_image(s, filename, 135);
+		_blit_image(s, 135, "facegen/race_%d/clothes/cloth_%d_%d.png", race, gender, clothes);
 	}
-
-	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/eyes/eyes_%d_%d.png", race, gender, eyes);
-	//printf("%s\n", filename);
-	_blit_image(s, filename, 42);
-
-	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/nose/nose_%d_%d.png", race, gender, nose);
-	//printf("%s\n", filename);
-	_blit_image(s, filename, 89);
-
-	snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/mouth/mouth_%d_%d.png", race, gender, mouth);
-	//printf("%s\n", filename);
-	_blit_image(s, filename, 155);
-
+	_blit_image(s, 42, "facegen/race_%d/eyes/eyes_%d_%d.png", race, gender, eyes);
+	_blit_image(s, 89, "facegen/race_%d/nose/nose_%d_%d.png", race, gender, nose);
+	_blit_image(s, 155, "facegen/race_%d/mouth/mouth_%d_%d.png", race, gender, mouth);
 	if (!(flags & ARMOUR)) {
-		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/race_%d/hair/hair_%d_%d.png", race, gender, hair);
-		//printf("%s\n", filename);
-		_blit_image(s, filename, 0);
-
-		snprintf(filename, sizeof(filename), PIONEER_DATA_DIR "/facegen/accessories/acc_%d.png", accessories);
-		//printf("%s\n", filename);
-		_blit_image(s, filename, -10);
+		_blit_image(s, 0, "facegen/race_%d/hair/hair_%d_%d.png", race, gender, hair);
+		_blit_image(s, -10, "facegen/accessories/acc_%d.png", accessories);
 	}
 	else
-		_blit_image(s, PIONEER_DATA_DIR "/facegen/armour.png", 0);
+		_blit_image(s, 0, "/facegen/armour.png");
 
 	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, &m_tex);

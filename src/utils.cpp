@@ -112,6 +112,14 @@ std::string GetPiDataFile(const std::string &name, const std::string &path)
 	return name; // default, whether or not it exists
 }
 
+std::string GetPiDataFile(const std::string &pathname)
+{
+	size_t slash = pathname.find_last_of('/');
+	if (slash == std::string::npos)
+		return GetPiDataFile(pathname, "");
+	return GetPiDataFile(pathname.substr(slash + 1), pathname.substr(0, slash));
+}
+
 FILE *fopen_or_die(const char *filename, const char *mode)
 {
 	FILE *f = fopen(filename, mode);
@@ -120,6 +128,11 @@ FILE *fopen_or_die(const char *filename, const char *mode)
 		throw MissingFileException();
 	}
 	return f;
+}
+
+FILE *fopen_or_die(const std::string &filename, const char *mode)
+{
+	return fopen_or_die(filename.c_str(), mode);
 }
 
 std::string format_money(Sint64 money)
@@ -377,14 +390,14 @@ std::string string_subst(const char *format, const unsigned int num_args, std::s
 
 static std::map<std::string, GLuint> s_textures;
 
-GLuint util_load_tex_rgba(const char *filename)
+GLuint util_load_tex_rgba(const std::string &filename)
 {
 	GLuint tex = -1;
 	std::map<std::string, GLuint>::iterator t = s_textures.find(filename);
 
 	if (t != s_textures.end()) return (*t).second;
 
-	SDL_Surface *s = IMG_Load(filename);
+	SDL_Surface *s = IMG_Load(filename.c_str());
 
 	if (s)
 	{
@@ -401,7 +414,7 @@ GLuint util_load_tex_rgba(const char *filename)
 			gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, s->w, s->h, GL_RGB, GL_UNSIGNED_BYTE, s->pixels);
 			break;
 		default:
-			printf("Texture '%s' needs to be 24 or 32 bit.\n", filename);
+			printf("Texture '%s' needs to be 24 or 32 bit.\n", filename.c_str());
 			exit(0);
 		}
 	

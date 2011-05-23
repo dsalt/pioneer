@@ -26,12 +26,12 @@ SectorView::SectorView()
 	m_infoLabel = new Gui::Label("");
 	Add(m_infoLabel, 2, Gui::Screen::GetHeight()-Gui::Screen::GetFontHeight()-66);
 	
-	m_zoomInButton = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/zoom_in_f7.png");
+	m_zoomInButton = new Gui::ImageButton(GetPiDataFile("zoom_in_f7.png", "icons"));
 	//m_zoomInButton->SetShortcut(SDLK_F6, KMOD_NONE);
 	m_zoomInButton->SetToolTip("Zoom in");
 	Add(m_zoomInButton, 700, 5);
 	
-	m_zoomOutButton = new Gui::ImageButton(PIONEER_DATA_DIR "/icons/zoom_out_f8.png");
+	m_zoomOutButton = new Gui::ImageButton(GetPiDataFile("zoom_out_f8.png", "icons"));
 	//m_zoomOutButton->SetShortcut(SDLK_F7, KMOD_NONE);
 	m_zoomOutButton->SetToolTip("Zoom out");
 	Add(m_zoomOutButton, 732, 5);

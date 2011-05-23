@@ -8,12 +8,12 @@ Image::~Image()
 	glDeleteTextures(1, &m_tex);
 }
 
-Image::Image(const char *filename): Widget()
+Image::Image(const std::string &filename): Widget()
 {
 	m_col[0] = m_col[1] = m_col[2] = m_col[3] = 1.0f;
-	SDL_Surface *is = IMG_Load(filename);
+	SDL_Surface *is = IMG_Load(filename.c_str());
 	if (!is) {
-		fprintf(stderr, "Could not load %s\n", filename);
+		fprintf(stderr, "Could not load %s\n", filename.c_str());
 		exit(0);
 	}
 	m_imgw = is->w;

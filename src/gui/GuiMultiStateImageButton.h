@@ -13,9 +13,9 @@ namespace Gui {
 		virtual void Draw();
 		virtual ~MultiStateImageButton();
 		virtual void GetSizeRequested(float size[2]);
-		void AddState(int state, const char *icon);
-		void AddState(int state, const char *icon, std::string tooltip);
-		void AddState(int state, const char *inactiveIcon, const char *activeIcon, std::string tooltip);
+		void AddState(int state, const std::string &icon);
+		void AddState(int state, const std::string &icon, std::string tooltip);
+		void AddState(int state, const std::string &inactiveIcon, const std::string &activeIcon, std::string tooltip);
 		int GetState() { return m_states[m_curState].state; }
 		void StateNext();
 		void StatePrev();
