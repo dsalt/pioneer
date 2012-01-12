@@ -4,11 +4,10 @@
 #include "libs.h"
 #include "DynamicBody.h"
 #include "ShipType.h"
-#include "MarketAgent.h"
 #include "ShipFlavour.h"
-// only for SBodyPath
-#include "StarSystem.h"
+#include "SystemPath.h"
 #include "BezierCurve.h"
+#include "Serializer.h"
 #include <list>
 
 class SpaceStation;
@@ -28,21 +27,26 @@ struct shipstats_t {
 	float shield_mass_left;
 };
 
-
-
-class Ship: public DynamicBody, public MarketAgent {
+class SerializableEquipSet: public EquipSet {
 public:
+	void Save(Serializer::Writer &wr);
+	void Load(Serializer::Reader &rd);
+};
+
+class Ship: public DynamicBody {
+public:
+	enum Animation { // <enum scope='Ship' name=ShipAnimation prefix=ANIM_>
+		ANIM_WHEEL_STATE
+	};
+
 	OBJDEF(Ship, DynamicBody, SHIP);
 	Ship(ShipType::Type shipType);
 	Ship() {}
+	virtual ~Ship();
 	virtual void SetDockedWith(SpaceStation *, int port);
 	/** Use GetDockedWith() to determine if docked */
-	SpaceStation *GetDockedWith() { return m_dockedWith; }
+	SpaceStation *GetDockedWith() const { return m_dockedWith; }
 	int GetDockingPort() const { return m_dockedWithPort; }
-	void SetNavTarget(Body* const target);
-	Body *GetNavTarget() const { return m_navTarget; }
-	void SetCombatTarget(Body* const target);
-	Body *GetCombatTarget() const { return m_combatTarget; }
 	virtual void Render(const vector3d &viewCoords, const matrix4x4d &viewTransform);
 
 	void SetThrusterState(int axis, double level) { m_thrusters[axis] = Clamp(level, -1.0, 1.0); }
@@ -53,7 +57,12 @@ public:
 	vector3d GetAngThrusterState() const { return m_angThrusters; }
 	void ClearThrusterState();
 
-	vector3d GetMaxThrust(const vector3d &dir);
+	vector3d GetMaxThrust(const vector3d &dir) const;
+	double GetAccelFwd() const { return -GetShipType().linThrust[ShipType::THRUSTER_FORWARD] / GetMass(); }
+	double GetAccelRev() const { return GetShipType().linThrust[ShipType::THRUSTER_REVERSE] / GetMass(); }
+	double GetAccelUp() const { return GetShipType().linThrust[ShipType::THRUSTER_UP] / GetMass(); }
+	double GetAccelMin() const;
+
 	void SetGunState(int idx, int state);
 	const ShipType &GetShipType() const;
 	const shipstats_t *CalcStats();
@@ -64,42 +73,49 @@ public:
 	virtual void TimeStepUpdate(const float timeStep);
 	virtual void StaticUpdate(const float timeStep);
 
-	virtual void NotifyDeleted(const Body* const deletedBody);
+	virtual void NotifyRemoved(const Body* const removedBody);
 	virtual bool OnCollision(Object *o, Uint32 flags, double relVel);
 	virtual bool OnDamage(Object *attacker, float kgDamage);
 
-	enum FlightState { FLYING, LANDED, DOCKING };
-       	FlightState GetFlightState() const { return m_flightState; }
+	enum FlightState { // <enum scope='Ship' name=ShipFlightState>
+		FLYING,     // open flight (includes autopilot)
+		DOCKING,    // in docking animation
+		DOCKED,     // docked with station
+		LANDED,     // rough landed (not docked)
+		HYPERSPACE, // in hyperspace
+	};
+
+	FlightState GetFlightState() const { return m_flightState; }
 	void SetFlightState(FlightState s) { m_flightState = s; }
 	float GetWheelState() const { return m_wheelState; }
 	bool Jettison(Equip::Type t);
-	const SBodyPath *GetHyperspaceTarget() const { return &m_hyperspace.dest; }
-	int GetHyperspaceCloudTargetId() { return m_hyperspace.followHypercloudId; }
-	// follow departure cloud
-	void SetHyperspaceTarget(HyperspaceCloud *cloud);
-	// just jump to near an SBody
-	void SetHyperspaceTarget(const SBodyPath *path);
-	void ClearHyperspaceTarget();
-    void ResetHyperspaceCountdown();
-	void TryHyperspaceTo(const SBodyPath *dest);
-	enum HyperjumpStatus {
+
+	void SetHyperspaceDest(const SystemPath &dest) { m_hyperspace.dest = dest; }
+	const SystemPath &GetHyperspaceDest() const { return m_hyperspace.dest; }
+	double GetHyperspaceDuration() const { return m_hyperspace.duration; }
+
+	enum HyperjumpStatus { // <enum scope='Ship' name=ShipJumpStatus prefix=HYPERJUMP_>
 		HYPERJUMP_OK,
 		HYPERJUMP_CURRENT_SYSTEM,
 		HYPERJUMP_NO_DRIVE,
 		HYPERJUMP_OUT_OF_RANGE,
-		HYPERJUMP_INSUFFICIENT_FUEL
+		HYPERJUMP_INSUFFICIENT_FUEL,
 	};
-	bool CanHyperspaceTo(const SBodyPath *dest, int &outFuelRequired, double &outDurationSecs, enum HyperjumpStatus *outStatus = 0);
-	void UseHyperspaceFuel(const SBodyPath *dest);
+	bool CanHyperspaceTo(const SystemPath *dest, int &outFuelRequired, double &outDurationSecs, enum HyperjumpStatus *outStatus = 0);
+	void UseHyperspaceFuel(const SystemPath *dest);
+
+	Ship::HyperjumpStatus StartHyperspaceCountdown(const SystemPath &dest);
 	float GetHyperspaceCountdown() const { return m_hyperspace.countdown; }
+	bool IsHyperspaceActive() const { return (m_hyperspace.countdown > 0.0); }
+	void ResetHyperspaceCountdown();
+
 	Equip::Type GetHyperdriveFuelType() const;
-	float GetWeakestThrustersForce() const;
 	// 0 to 1.0 is alive, > 1.0 = death
 	double GetHullTemperature() const;
 	void UseECM();
 	virtual bool FireMissile(int idx, Ship *target);
 
-	enum AlertState {
+	enum AlertState { // <enum scope='Ship' name=ShipAlertStatus prefix=ALERT_>
 		ALERT_NONE,
 		ALERT_SHIP_NEARBY,
 		ALERT_SHIP_FIRING,
@@ -108,13 +124,15 @@ public:
 
 	bool AIMatchVel(const vector3d &vel);
 	bool AIChangeVelBy(const vector3d &diffvel);		// acts in obj space
-	double AIMatchPosVel(const vector3d &targpos, const vector3d &curvel, double targvel, const vector3d &maxthrust);
+	bool AIMatchPosVel2(const vector3d &reldir, double targdist, const vector3d &relvel, double endspeed, double maxthrust);
+	double AIMatchPosVel(const vector3d &relpos, const vector3d &relvel, double endspeed, const vector3d &maxthrust);
 	void AIMatchAngVelObjSpace(const vector3d &angvel);
 	void AIFaceDirectionImmediate(const vector3d &dir);
-	double AIFaceOrient(const vector3d &dir, const vector3d &updir);
+	bool AIFaceOrient(const vector3d &dir, const vector3d &updir);
 	double AIFaceDirection(const vector3d &dir, double av=0);
 	vector3d AIGetNextFramePos();
 	vector3d AIGetLeadDir(const Body *target, const vector3d& targaccel, int gunindex=0);
+	double AITravelTime(const vector3d &reldir, double targdist, const vector3d &relvel, double targspeed, bool flip);
 
 	// old stuff, deprecated
 	void AIAccelToModelRelativeVelocity(const vector3d v);
@@ -123,12 +141,19 @@ public:
 
 	void AIClearInstructions();
 	bool AIIsActive() { return m_curAICmd ? true : false; }
-	enum AIError { NONE=0, GRAV_TOO_HIGH, REFUSED_PERM };
-	AIError AIMessage(AIError msg=NONE) { AIError tmp = m_aiMessage; m_aiMessage = msg; return tmp; }
+	void AIGetStatusText(char *str);
+
+	enum AIError { // <enum scope='Ship' name=ShipAIError prefix=AIERROR_>
+		AIERROR_NONE=0,
+		AIERROR_GRAV_TOO_HIGH,
+		AIERROR_REFUSED_PERM,
+		AIERROR_ORBIT_IMPOSSIBLE
+	};
+	AIError AIMessage(AIError msg=AIERROR_NONE) { AIError tmp = m_aiMessage; m_aiMessage = msg; return tmp; }
 
 	void AIKamikaze(Body *target);
 	void AIKill(Ship *target);
-	void AIJourney(SBodyPath &dest);
+	//void AIJourney(SBodyPath &dest);
 	void AIDock(SpaceStation *target);
 	void AIFlyTo(Body *target);
 	void AIOrbit(Body *target, double alt);
@@ -136,15 +161,10 @@ public:
 
 	void AIBodyDeleted(const Body* const body) {};		// todo: signals
 
-	EquipSet m_equipment;			// shouldn't be public?...
+	SerializableEquipSet m_equipment;			// shouldn't be public?...
+	shipstats_t m_stats;
 
-	virtual void PostLoadFixup();
-	/* MarketAgent stuff */
-	int GetStock(Equip::Type t) const { assert(0); return 0; }
-	bool CanBuy(Equip::Type t, bool verbose) const;
-	bool CanSell(Equip::Type t, bool verbose) const;
-	bool DoesSell(Equip::Type t) const { return true; }
-	Sint64 GetPrice(Equip::Type t) const;
+	virtual void PostLoadFixup(Space *space);
 
 	const ShipFlavour *GetFlavour() const { return &m_shipFlavour; }
 	// used to change ship label or colour. asserts if you try to change type
@@ -158,16 +178,23 @@ public:
 	void SetPercentHull(float);
 	float GetGunTemperature(int idx) const { return m_gunTemperature[idx]; }
 	
+	void EnterSystem();
+
+	HyperspaceCloud *GetHyperspaceCloud() const { return m_hyperspaceCloud; }
+
 	sigc::signal<void> onDock;				// JJ: check what these are for
 	sigc::signal<void> onUndock;
 protected:
-	virtual void Save(Serializer::Writer &wr);
-	virtual void Load(Serializer::Reader &rd);
+	virtual void Save(Serializer::Writer &wr, Space *space);
+	virtual void Load(Serializer::Reader &rd, Space *space);
 	void RenderLaserfire();
 
 	bool AITimeStep(float timeStep);		// returns true if complete
 
 	virtual void SetAlertState(AlertState as) { m_alertState = as; }
+
+	virtual void OnEnterHyperspace();
+	virtual void OnEnterSystem();
 
 	SpaceStation *m_dockedWith;
 	int m_dockedWithPort;
@@ -176,9 +203,6 @@ protected:
 	float m_gunRecharge[ShipType::GUNMOUNT_MAX];
 	float m_gunTemperature[ShipType::GUNMOUNT_MAX];
 	float m_ecmRecharge;
-	/* MarketAgent stuff */
-	void Bought(Equip::Type t);
-	void Sold(Equip::Type t);
 
 private:
 	float GetECMRechargeTime();
@@ -187,33 +211,34 @@ private:
 	bool IsFiringLasers();
 	void TestLanded();
 	void UpdateAlertState();
+	void OnEquipmentChange(Equip::Type e);
+	void EnterHyperspace();
 
 	FlightState m_flightState;
 	bool m_testLanded;
 	float m_launchLockTimeout;
 	float m_wheelState;
-	float m_wheelTransition;
+	int m_wheelTransition;
 
 	vector3d m_thrusters;
 	vector3d m_angThrusters;
-	Body* m_navTarget;
-	Body* m_combatTarget;
-	shipstats_t m_stats;
 
 	AlertState m_alertState;
-	float m_lastFiringAlert;
+	double m_lastFiringAlert;
 
 	struct HyperspacingOut {
-		int followHypercloudId;
-		SBodyPath dest;
+		SystemPath dest;
 		// > 0 means active
 		float countdown;
+		bool now;
+		double duration;
 	} m_hyperspace;
+	HyperspaceCloud *m_hyperspaceCloud;
 
 	AICommand *m_curAICmd;
 	AIError m_aiMessage;
 
-	int m_combatTargetIndex, m_navTargetIndex, m_dockedWithIndex; // deserialisation
+	int m_dockedWithIndex; // deserialisation
 };
 
 

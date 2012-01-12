@@ -12,10 +12,11 @@ public:
 	CargoBody() {}
 	Equip::Type GetCargoType() const { return m_type; }
 	virtual void Render(const vector3d &viewCoords, const matrix4x4d &viewTransform);
+	virtual bool OnCollision(Object *o, Uint32 flags, double relVel);
 	virtual bool OnDamage(Object *attacker, float kgDamage);
 protected:
-	virtual void Save(Serializer::Writer &wr);
-	virtual void Load(Serializer::Reader &rd);
+	virtual void Save(Serializer::Writer &wr, Space *space);
+	virtual void Load(Serializer::Reader &rd, Space *space);
 private:
 	void Init();
 	Equip::Type m_type;

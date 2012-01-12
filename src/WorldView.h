@@ -4,19 +4,21 @@
 #include "libs.h"
 #include "gui/Gui.h"
 #include "View.h"
-#include "Render.h"
+#include "render/Render.h"
 #include "Serializer.h"
 #include "Background.h"
+#include "EquipType.h"
+#include "Camera.h"
 
 class Body;
 class Frame;
-class SBodyPath;
 class LabelSet;
 class Ship;
 
 class WorldView: public View {
 public:
 	WorldView();
+	WorldView(Serializer::Reader &reader);
 	virtual ~WorldView();
 	virtual void ShowAll();
 	virtual void Update();
@@ -27,15 +29,13 @@ public:
 	bool GetShowLabels() { return m_labelsOn; }
 	void DrawBgStars();
 	vector3d GetExternalViewTranslation();
-	void ApplyExternalViewRotation(matrix4x4d &m);
+	matrix4x4d GetExternalViewRotation();
 	virtual void Save(Serializer::Writer &wr);
-	virtual void Load(Serializer::Reader &rd);
 	enum CamType { CAM_FRONT, CAM_REAR, CAM_EXTERNAL };
 	void SetCamType(enum CamType);
 	enum CamType GetCamType() const;
 	int GetNumLights() const { return m_numLights; }
 	void ToggleTargetActions();
-	void GetNearFarClipPlane(float *outNear, float *outFar) const;
 	int GetActiveWeapon() const;
 	void OnClickBlastoff();
 
@@ -45,12 +45,43 @@ public:
 	double m_externalViewDist;
 
 private:
+	void InitObject();
+
 	void RefreshButtonStateAndVisibility();
 	void UpdateCommsOptions();
-	void ProjectObjsToScreenPos(const Frame *cam_frame);
-	void DrawTargetSquares();
-	void DrawTargetSquare(const Body* const target);
-	void DrawCombatTargetIndicator(const Ship* const target);
+
+	enum IndicatorSide {
+		INDICATOR_HIDDEN,
+		INDICATOR_ONSCREEN,
+		INDICATOR_LEFT,
+		INDICATOR_RIGHT,
+		INDICATOR_TOP,
+		INDICATOR_BOTTOM
+	};
+
+	struct Indicator {
+		float pos[2];
+		IndicatorSide side;
+		Gui::Label *label;
+		Indicator() {
+			pos[0] = pos[1] = 0;
+			side = INDICATOR_HIDDEN;
+			label = 0;
+		}
+	};
+
+	void UpdateProjectedObjects();
+	void UpdateIndicator(Indicator &indicator, const vector3d &direction);
+	void HideIndicator(Indicator &indicator);
+	void SeparateLabels(Gui::Label *a, Gui::Label *b);
+
+	void DrawCrosshair(float px, float py, float sz);
+	void DrawCombatTargetIndicator(const Indicator &target, const Indicator &lead);
+	void DrawTargetSquare(const Indicator &marker);
+	void DrawVelocityIndicator(const Indicator &marker);
+	void DrawCircleIndicator(const Indicator &marker);
+	void DrawImageIndicator(const Indicator &marker, const char *icon_path);
+	void DrawEdgeMarker(const Indicator &marker);
 
 	Gui::Button *AddCommsOption(const std::string msg, int ypos, int optnum);
 	void AddCommsNavOption(const std::string msg, Body *target);
@@ -61,13 +92,18 @@ private:
 	void OnChangeWheelsState(Gui::MultiStateImageButton *b);
 	void OnChangeLabelsState(Gui::MultiStateImageButton *b);
 	void OnChangeFlightState(Gui::MultiStateImageButton *b);
-	void OnChangeHyperspaceTarget();
+	void OnHyperspaceTargetChanged();
+	void OnPlayerEquipmentChange(Equip::Type e);
 	void OnPlayerDockOrUndock();
+	void OnPlayerChangeTarget();
 	void OnPlayerChangeFlightControlState();
 	void SelectBody(Body *, bool reselectIsDeselect);
 	Body* PickBody(const double screenX, const double screenY) const;
 	void MouseButtonDown(int button, int x, int y);
+
 	Gui::ImageButton *m_hyperspaceButton;
+	bool m_showHyperspaceButton;
+
 	Gui::Fixed *m_commsOptions;
 	Gui::VBox *m_commsNavOptions;
 	Gui::HBox *m_commsNavOptionsContainer;
@@ -79,8 +115,6 @@ private:
 	enum CamType m_camType;
 	int m_numLights;
 	Uint32 m_showTargetActionsTimeout;
-	Background::Starfield m_starfield;
-	Background::MilkyWay m_milkyWay;
 
 #if DEVKEYS
 	Gui::Label *m_debugInfo;
@@ -90,19 +124,25 @@ private:
 	Gui::MeterBar *m_hudHullTemp, *m_hudWeaponTemp, *m_hudHullIntegrity, *m_hudShieldIntegrity;
 	Gui::MeterBar *m_hudTargetHullIntegrity, *m_hudTargetShieldIntegrity;
 
-	sigc::connection m_onPlayerChangeHyperspaceTargetCon;
+	sigc::connection m_onHyperspaceTargetChangedCon;
+	sigc::connection m_onPlayerEquipmentChangeCon;
+
 	sigc::connection m_onPlayerChangeTargetCon;
 	sigc::connection m_onChangeFlightControlStateCon;
 	sigc::connection m_onMouseButtonDown;
 
 	Gui::LabelSet *m_bodyLabels;
-	Gui::Label *m_targetDist, *m_targetSpeed, *m_combatDist, *m_combatSpeed;
-	bool m_velocityIndicatorOnscreen;
-	int m_velocityIndicatorPos[2];
-	bool m_targLeadOnscreen;
-	vector3d m_targLeadPos;
-	bool m_navVelocityIndicatorOnscreen;
-	int m_navVelocityIndicatorPos[2];
+	std::map<Body*,vector3d> m_projectedPos;
+
+	Camera *m_frontCamera, *m_rearCamera, *m_externalCamera;
+	Camera *m_activeCamera;
+
+	Indicator m_velIndicator;
+	Indicator m_navVelIndicator;
+	Indicator m_navTargetIndicator;
+	Indicator m_combatTargetIndicator;
+	Indicator m_targetLeadIndicator;
+	Indicator m_mouseDirIndicator;
 };
 
 #endif /* _WORLDVIEW_H */

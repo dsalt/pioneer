@@ -3,17 +3,17 @@
 
 #include "buildopts.h"
 
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 #include <sigc++/sigc++.h>
 #include <SDL.h>
 #include <GL/glew.h>
 #include <SDL_image.h>
-#include <float.h>
+#include <cfloat>
 #include <limits>
-#include <time.h>
-#include <stdarg.h>
-
+#include <ctime>
+#include <cstdarg>
+#include <cstdlib>
 
 /* on unix this would probably become $PREFIX/pioneer */
 #ifndef PIONEER_DATA_DIR
@@ -21,28 +21,31 @@
 #endif /* PIONEER_DATA_DIR */
 
 #ifdef _WIN32
-#include <malloc.h>
-#ifndef __MINGW32__
-#define alloca _alloca
-#define strncasecmp _strnicmp
-#define strcasecmp _stricmp
+#	include <malloc.h>
 
-#ifndef isfinite
+#	ifndef __MINGW32__
+#		define alloca _alloca
+#		define strncasecmp _strnicmp
+#		define strcasecmp _stricmp
+#		define snprintf _snprintf
+
+#		ifndef isfinite
 inline int isfinite(double x) { return _finite(x); }
-#endif
-#endif /* __MINGW32__ */
+#		endif
 
-#else
-#include <alloca.h>
-#endif
+#		include "win32-dirent.h"
+#	else
+#		include <dirent.h>
+#		include <sys/stat.h>
+#		include <stdexcept>
+#		define WINSHLWAPI
+#	endif /* __MINGW32__ */
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef __MINGW32__
-#define NOMINMAX
-#endif
-#include <windows.h>
-#define snprintf _snprintf
+#else /* !_WIN32 */
+#	include <dirent.h>
+#	include <errno.h>
+#	include <sys/stat.h>
+#	include <sys/types.h>
 #endif
 
 #include "fixed.h"
@@ -53,9 +56,12 @@ inline int isfinite(double x) { return _finite(x); }
 #include "mtrand.h"
 
 #include "utils.h"
+#include "FloatComparison.h"
+#include "SmartPtr.h"
+#include "RefCounted.h"
 
 #ifdef NDEBUG 
-#define	PiVerify(x) x
+#define	PiVerify(x) ((void)(x))
 #else
 #define PiVerify(x) assert(x)
 #endif

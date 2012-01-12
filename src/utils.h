@@ -12,7 +12,7 @@
 #define glError() { \
 	GLenum err = glGetError(); \
 	while (err != GL_NO_ERROR) { \
-		fprintf(stderr, "glError: %s caught at %s:%u\n", (char *)gluErrorString(err), __FILE__, __LINE__); \
+		fprintf(stderr, "glError: %s caught at %s:%u\n", reinterpret_cast<const char *>(gluErrorString(err)), __FILE__, __LINE__); \
 		err = glGetError(); \
 	} \
 }
@@ -24,6 +24,15 @@
 #define __attribute(x)
 #endif /* __GNUC__ */
 
+// GCC warns when a function marked __attribute((noreturn)) actually returns a value
+// but other compilers which don't see the noreturn attribute of course require that
+// a function with a non-void return type should return something.
+#ifndef __GNUC__
+#define RETURN_ZERO_NONGNU_ONLY return 0;
+#else
+#define RETURN_ZERO_NONGNU_ONLY
+#endif
+
 void Error(const char *format, ...) __attribute((format(printf,1,2))) __attribute((noreturn));
 void Warning(const char *format, ...) __attribute((format(printf,1,2)));
 void SilentWarning(const char *format, ...) __attribute((format(printf,1,2)));
@@ -31,34 +40,20 @@ void SilentWarning(const char *format, ...) __attribute((format(printf,1,2)));
 std::string GetPiUserDir(const std::string &subdir = "");
 std::string GetPiDataDir();
 
-struct MissingFileException {};
+inline std::string GetPiSavefileDir() { return GetPiUserDir("savefiles"); }
+
+void GetDirectoryContents(const std::string &path, std::list<std::string> &files);
 
 // joinpath("data","models","some.def") = "data/models/some.def"
 std::string join_path(const char *firstbit, ...);
 std::string string_join(std::vector<std::string> &v, std::string sep);
-std::string string_subst(const char *format, const unsigned int num_args, std::string args[]);
 std::string format_date(double time);
 std::string format_date_only(double time);
 std::string format_distance(double dist);
 std::string format_money(Sint64 money);
-void strip_cr_lf(char *string);
-
-GLuint util_load_tex_rgba(const char *filename);
 
 FILE *fopen_or_die(const char *filename, const char *mode);
-
-static inline std::string stringf(int maxlen, const char *format, ...)
-		__attribute((format(printf,2,3)));
-
-static inline std::string stringf(int maxlen, const char *format, ...)
-{
-	char *buf = reinterpret_cast<char*>(alloca(maxlen));
-	va_list argptr;
-	va_start(argptr, format);
-	vsnprintf(buf, maxlen, format, argptr);
-	va_end(argptr);
-	return std::string(buf);
-}
+size_t fread_or_die(void* ptr, size_t size, size_t nmemb, FILE* stream, bool allow_truncated = false);
 
 static inline Sint64 isqrt(Sint64 a)
 {
@@ -77,16 +72,6 @@ static inline Sint64 isqrt(Sint64 a)
 	return ret;
 }
 
-struct Plane {
-	double a, b, c, d;
-	double DistanceToPoint(const vector3d &p) {
-		return a*p.x + b*p.y + c*p.z + d;
-	}
-};
-
-/* from current GL modelview*projection matrix */
-void GetFrustum(Plane planes[6]);
-
 bool is_file(const std::string &filename);
 bool is_dir(const std::string &filename);
 /** args to callback are basename, full path */
@@ -95,6 +80,22 @@ void foreach_file_in(const std::string &directory, void (*callback)(const std::s
 Uint32 ceil_pow2(Uint32 v);
 
 void Screendump(const char* destFile, const int w, const int h);
+
+// convert one multibyte (utf8) char to a widechar (utf32/ucs4)
+//  chr: pointer to output storage
+//  src: multibyte string
+//  returns: number of bytes swallowed, or 0 if end of string
+int conv_mb_to_wc(Uint32 *chr, const char *src);
+
+// encode one Unicode code-point as UTF-8
+//  chr: the Unicode code-point
+//  buf: a character buffer, which must have space for at least 4 bytes
+//       (i.e., assigning to buf[3] must be a valid operation)
+//  returns: number of bytes in the encoded character
+int conv_wc_to_mb(Uint32 chr, char buf[4]);
+
+// find string in bigger string, ignoring case
+const char *pi_strcasestr(const char *haystack, const char *needle);
 
 // add a few things that MSVC is missing
 #ifdef _MSC_VER
@@ -110,5 +111,7 @@ static inline float roundf(float x)
    return x >= 0.0f ? floorf(x + 0.5f) : ceilf(x - 0.5f);
 }
 #endif /* _MSC_VER */
+
+void hexdump(const unsigned char *buf, int bufsz);
 
 #endif /* _UTILS_H */

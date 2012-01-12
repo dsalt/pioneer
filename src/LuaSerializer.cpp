@@ -6,7 +6,7 @@
 #include "LuaPlanet.h"
 #include "LuaStar.h"
 #include "LuaPlayer.h"
-#include "LuaSBodyPath.h"
+#include "LuaSystemPath.h"
 #include "StarSystem.h"
 #include "Body.h"
 #include "Ship.h"
@@ -15,6 +15,7 @@
 #include "Star.h"
 #include "Player.h"
 #include "Pi.h"
+#include "Game.h"
 
 // every module can save one object. that will usually be a table.  we call
 // each serializer in turn and capture its return value we build a table like
@@ -37,7 +38,7 @@
 
 // pickler can handle simple types (boolean, number, string) and will drill
 // down into tables. it can do userdata for a specific set of types - Body and
-// its kids and SBodyPath. anything else will cause a lua error
+// its kids and SystemPath. anything else will cause a lua error
 //
 // pickle format is newline-seperated. each line begins with a type value,
 // followed by data for that type as follows
@@ -47,14 +48,61 @@
 //   t        - table. table contents are more pickled stuff (ie recursive)
 //   n        - end of table
 //   uXXXX    - userdata. XXXX is type, followed by newline, followed by data
-//     Body      - data is a single stringified number for Serializer::LookupBody
-//     SBodyPath - data is four stringified numbers, newline separated
+//     Body       - data is a single stringified number for Serializer::LookupBody
+//     SystemPath - data is four stringified numbers, newline separated
+//   oXXXX    - object. XXX is type, followed by newline, followed by one
+//              pickled item (typically t[able])
+
+
+// on serialize, if an item has a metatable with a "class" attribute, the
+// "Serialize" function under that namespace will be called with the type. the
+// data returned will then be serialized as an "object" above.
+//
+// on deserialize, the data after an "object" item will be passed to the
+// "Deserialize" function under that namespace. that data returned will be
+// given back to the module
 
 void LuaSerializer::pickle(lua_State *l, int idx, std::string &out, const char *key = NULL)
 {
 	static char buf[256];
 
 	LUA_DEBUG_START(l);
+
+	idx = (idx < 0) ? lua_gettop(l)+idx+1 : idx;
+
+	if (lua_getmetatable(l, idx)) {
+		lua_getfield(l, -1, "class");
+		if (lua_isnil(l, -1))
+			lua_pop(l, 2);
+
+		else {
+			const char *cl = lua_tostring(l, -1);
+			snprintf(buf, sizeof(buf), "o%s\n", cl);
+
+			lua_getfield(l, LUA_GLOBALSINDEX, cl);
+			if (lua_isnil(l, -1))
+				luaL_error(l, "No Serialize method found for class '%s'\n", cl);
+
+			lua_getfield(l, -1, "Serialize");
+			if (lua_isnil(l, -1))
+				luaL_error(l, "No Serialize method found for class '%s'\n", cl);
+
+			lua_pushvalue(l, idx);
+			pi_lua_protected_call(l, 1, 1);
+
+			lua_remove(l, idx);
+			lua_insert(l, idx);
+
+			lua_pop(l, 3);
+
+			if (lua_isnil(l, idx)) {
+				LUA_DEBUG_END(l, 0);
+				return;
+			}
+
+			out += buf;
+		}
+	}
 
 	switch (lua_type(l, idx)) {
 		case LUA_TNIL:
@@ -115,15 +163,16 @@ void LuaSerializer::pickle(lua_State *l, int idx, std::string &out, const char *
 			// XXX object wrappers should really have Serialize/Unserialize
 			// methods to deal with this
 			if (lo->Isa("SystemPath")) {
-				SBodyPath *sbp = dynamic_cast<SBodyPath*>(lo->m_object);
-				snprintf(buf, sizeof(buf), "SBodyPath\n%d\n%d\n%d\n%d\n", sbp->sectorX, sbp->sectorY, sbp->systemNum, sbp->sbodyId);
+				SystemPath *sbp = dynamic_cast<SystemPath*>(lo->m_object);
+				snprintf(buf, sizeof(buf), "SystemPath\n%d\n%d\n%d\n%d\n%d\n",
+					sbp->sectorX, sbp->sectorY, sbp->sectorZ, sbp->systemIndex, sbp->bodyIndex);
 				out += buf;
 				break;
 			}
 
 			if (lo->Isa("Body")) {
 				Body *b = dynamic_cast<Body*>(lo->m_object);
-				snprintf(buf, sizeof(buf), "Body\n%d\n", Serializer::LookupBody(b));
+				snprintf(buf, sizeof(buf), "Body\n%d\n", Pi::game->GetSpace()->GetIndexForBody(b));
 				out += buf;
 				break;
 			}
@@ -167,7 +216,7 @@ const char *LuaSerializer::unpickle(lua_State *l, const char *pos)
 
 		case 's': {
 			char *end;
-			int len = strtod(pos, &end);
+			int len = strtol(pos, const_cast<char**>(&end), 0);
 			if (pos == end) throw SavedGameCorruptException();
 			end++; // skip newline
 			lua_pushlstring(l, end, len);
@@ -192,28 +241,31 @@ const char *LuaSerializer::unpickle(lua_State *l, const char *pos)
 			int len = end - pos;
 			end++; // skip newline
 
-			if (len == 9 && strncmp(pos, "SBodyPath", 9) == 0) {
+			if (len == 10 && strncmp(pos, "SystemPath", 10) == 0) {
 				pos = end;
 
-				int sectorX = strtol(pos, const_cast<char**>(&end), 0);
+				Sint32 sectorX = strtol(pos, const_cast<char**>(&end), 0);
 				if (pos == end) throw SavedGameCorruptException();
 				pos = end+1; // skip newline
 
-				int sectorY = strtol(pos, const_cast<char**>(&end), 0);
+				Sint32 sectorY = strtol(pos, const_cast<char**>(&end), 0);
 				if (pos == end) throw SavedGameCorruptException();
 				pos = end+1; // skip newline
 
-				int systemNum = strtol(pos, const_cast<char**>(&end), 0);
+				Sint32 sectorZ = strtol(pos, const_cast<char**>(&end), 0);
 				if (pos == end) throw SavedGameCorruptException();
 				pos = end+1; // skip newline
 
-				int sbodyId = strtol(pos, const_cast<char**>(&end), 0);
+				Sint32 systemNum = strtol(pos, const_cast<char**>(&end), 0);
 				if (pos == end) throw SavedGameCorruptException();
 				pos = end+1; // skip newline
 
-				SBodyPath *sbp = new SBodyPath(sectorX, sectorY, systemNum);
-				sbp->sbodyId = sbodyId;
-				LuaSBodyPath::PushToLuaGC(sbp);
+				Sint32 sbodyId = strtol(pos, const_cast<char**>(&end), 0);
+				if (pos == end) throw SavedGameCorruptException();
+				pos = end+1; // skip newline
+
+				SystemPath *sbp = new SystemPath(sectorX, sectorY, sectorZ, systemNum, sbodyId);
+				LuaSystemPath::PushToLuaGC(sbp);
 
 				break;
 			}
@@ -225,7 +277,7 @@ const char *LuaSerializer::unpickle(lua_State *l, const char *pos)
 				if (pos == end) throw SavedGameCorruptException();
 				pos = end+1; // skip newline
 
-				Body *body = Serializer::LookupBody(n);
+				Body *body = Pi::game->GetSpace()->GetBodyByIndex(n);
 				if (pos == end) throw SavedGameCorruptException();
 
 				switch (body->GetType()) {
@@ -257,6 +309,39 @@ const char *LuaSerializer::unpickle(lua_State *l, const char *pos)
 			throw SavedGameCorruptException();
 		}
 
+		case 'o': {
+			const char *end = strchr(pos, '\n');
+			if (!end) throw SavedGameCorruptException();
+			int len = end - pos;
+			end++; // skip newline
+
+			const char *cl = pos;
+
+			lua_pushlstring(l, pos, len);
+
+			pos = unpickle(l, end);
+			lua_insert(l, -2);
+
+			lua_gettable(l, LUA_GLOBALSINDEX);
+			if (lua_isnil(l, -1)) {
+				lua_pop(l, 2);
+				break;
+			}
+
+			lua_getfield(l, -1, "Unserialize");
+			if (lua_isnil(l, -1)) {
+				lua_pushlstring(l, cl, len);
+				luaL_error(l, "No Unserialize method found for class '%s'\n", lua_tostring(l, -1));
+			}
+
+			lua_insert(l, -3);
+			lua_pop(l, 1);
+
+			pi_lua_protected_call(l, 1, 1);
+
+			break;
+		}
+
 		default:
 			throw SavedGameCorruptException();
 	}
@@ -268,7 +353,7 @@ const char *LuaSerializer::unpickle(lua_State *l, const char *pos)
 
 void LuaSerializer::Serialize(Serializer::Writer &wr)
 {
-	lua_State *l = Pi::luaManager.GetLuaState();
+	lua_State *l = Pi::luaManager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -287,7 +372,7 @@ void LuaSerializer::Serialize(Serializer::Writer &wr)
 	while (lua_next(l, -2) != 0) {
 		lua_pushinteger(l, 1);
 		lua_gettable(l, -2);
-		lua_call(l, 0, 1);
+		pi_lua_protected_call(l, 0, 1);
 		lua_pushvalue(l, -3);
 		lua_insert(l, -2);
 		lua_settable(l, savetable);
@@ -308,14 +393,14 @@ void LuaSerializer::Serialize(Serializer::Writer &wr)
 
 void LuaSerializer::Unserialize(Serializer::Reader &rd)
 {
-	lua_State *l = Pi::luaManager.GetLuaState();
+	lua_State *l = Pi::luaManager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
 	std::string pickled = rd.String();
 	const char *start = pickled.c_str();
 	const char *end = unpickle(l, start);
-	if ((end - start) != pickled.length()) throw SavedGameCorruptException();
+	if (size_t(end - start) != pickled.length()) throw SavedGameCorruptException();
 	if (!lua_istable(l, -1)) throw SavedGameCorruptException();
 	int savetable = lua_gettop(l);
 
@@ -337,7 +422,7 @@ void LuaSerializer::Unserialize(Serializer::Reader &rd)
 			lua_pop(l, 1);
 			lua_newtable(l);
 		}
-		lua_call(l, 1, 0);
+		pi_lua_protected_call(l, 1, 0);
 		lua_pop(l, 2);
 	}
 

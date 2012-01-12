@@ -5,6 +5,8 @@
 #include "gui/Gui.h"
 #include "ShipCpanelMultiFuncDisplays.h"
 #include "Ship.h"
+#include "Serializer.h"
+#include "Game.h"
 
 class Body;
 class SpaceStation;
@@ -12,19 +14,27 @@ class SpaceStation;
 class ShipCpanel: public Gui::Fixed {
 public:
 	ShipCpanel();
+    ShipCpanel(Serializer::Reader &rd);
 	virtual ~ShipCpanel();
 	virtual void Draw();
 	void Update();
 	MsgLogWidget *MsgLog() { return m_msglog; }
 	void SetAlertState(Ship::AlertState as);
+
+	void TimeStepUpdate(float step);
+
+	void Save(Serializer::Writer &wr);
+
 private:
+	void InitObject();
+
 	enum MapView { MAP_SECTOR, MAP_SYSTEM, MAP_INFO, MAP_GALACTIC };
 
 	void OnChangeCamView(Gui::MultiStateImageButton *b);
 	void OnChangeToMapView(Gui::MultiStateImageButton *b);
 	void OnChangeMapView(enum MapView);
 	void OnChangeInfoView(Gui::MultiStateImageButton *b);
-	void OnClickTimeaccel(int val);
+	void OnClickTimeaccel(Game::TimeAccel val);
 	void OnClickComms(Gui::MultiStateImageButton *b);
 	void OnDockingClearanceExpired(const SpaceStation *);
 
@@ -44,6 +54,7 @@ private:
 	ScannerWidget *m_scanner;
 	MsgLogWidget *m_msglog;
 	UseEquipWidget *m_useEquipWidget;
+	Gui::RadioGroup *m_leftButtonGroup, *m_rightButtonGroup;
 	Gui::ImageRadioButton *m_timeAccelButtons[6];
 	Gui::Widget *m_mapViewButtons[4];
 	Gui::Image *m_alertLights[3];

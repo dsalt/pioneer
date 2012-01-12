@@ -21,18 +21,17 @@ public:
 	virtual vector3d GetVelocity() const { return m_vel; }
 	virtual double GetBoundingRadius() const { return 1200.0; }
 	virtual void Render(const vector3d &viewCoords, const matrix4x4d &viewTransform);
-	virtual void PostLoadFixup();
+	virtual void PostLoadFixup(Space *space);
 	virtual void TimeStepUpdate(const float timeStep);
 	Ship *GetShip() { return m_ship; }
 	Ship *EvictShip();
 	double GetDueDate() const { return m_due; }
 	void SetIsArrival(bool isArrival);
 	bool IsArrival() const { return m_isArrival; }
-	int GetId() const { return m_id; }
 	virtual void UpdateInterpolatedTransform(double alpha);
 protected:
-	virtual void Save(Serializer::Writer &wr);
-	virtual void Load(Serializer::Reader &rd);
+	virtual void Save(Serializer::Writer &wr, Space *space);
+	virtual void Load(Serializer::Reader &rd, Space *space);
 private:
 	Ship *m_ship;
 	vector3d m_pos;
@@ -40,7 +39,6 @@ private:
 	double m_birthdate;
 	double m_due;
 	bool m_isArrival;
-	int m_id;
 };
 
 #endif /* _HYPERSPACECLOUD_H */

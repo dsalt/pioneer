@@ -10,14 +10,15 @@
 #include "Projectile.h"
 #include "Missile.h"
 #include "HyperspaceCloud.h"
+#include "Pi.h"
+#include "Space.h"
+#include "Game.h"
 
 Body::Body()
 {
 	m_frame = 0;
 	m_flags = 0;
 	m_hasDoubleFrame = false;
-	m_projectedPos = vector3d(0.0f, 0.0f, 0.0f);
-	m_onscreen = false;
 	m_dead = false;
 }
 
@@ -25,27 +26,23 @@ Body::~Body()
 {
 }
 
-void Body::Save(Serializer::Writer &wr)
+void Body::Save(Serializer::Writer &wr, Space *space)
 {
-	wr.Int32(Serializer::LookupFrame(m_frame));
+	wr.Int32(space->GetIndexForFrame(m_frame));
 	wr.String(m_label);
-	wr.Bool(m_onscreen);
-	wr.Vector3d(m_projectedPos);
 	wr.Bool(m_dead);
 	wr.Bool(m_hasDoubleFrame);
 }
 
-void Body::Load(Serializer::Reader &rd)
+void Body::Load(Serializer::Reader &rd, Space *space)
 {
-	m_frame = Serializer::LookupFrame(rd.Int32());
+	m_frame = space->GetFrameByIndex(rd.Int32());
 	m_label = rd.String();
-	m_onscreen = rd.Bool();
-	m_projectedPos = rd.Vector3d();
 	m_dead = rd.Bool();
 	m_hasDoubleFrame = rd.Bool();
 }	
 
-void Body::Serialize(Serializer::Writer &_wr)
+void Body::Serialize(Serializer::Writer &_wr, Space *space)
 {
 	Serializer::Writer wr;
 	wr.Int32(int(GetType()));
@@ -59,7 +56,7 @@ void Body::Serialize(Serializer::Writer &_wr)
 		case Object::CARGOBODY:
 		case Object::PROJECTILE:
 		case Object::HYPERSPACECLOUD:
-			Save(wr);
+			Save(wr, space);
 			break;
 		default:
 			assert(0);
@@ -71,7 +68,7 @@ void Body::Serialize(Serializer::Writer &_wr)
 	_wr.WrSection("Body", wr.GetData());
 }
 
-Body *Body::Unserialize(Serializer::Reader &_rd)
+Body *Body::Unserialize(Serializer::Reader &_rd, Space *space)
 {
 	Serializer::Reader rd = _rd.RdSection("Body");
 	Body *b = 0;
@@ -98,7 +95,7 @@ Body *Body::Unserialize(Serializer::Reader &_rd)
 		default:
 			assert(0);
 	}
-	b->Load(rd);
+	b->Load(rd, space);
 	// must SetFrame() correctly so ModelBodies can add geom to space
 	Frame *f = b->m_frame;
 	b->m_frame = 0;
@@ -126,21 +123,20 @@ vector3d Body::GetInterpolatedPositionRelTo(const Frame *relTo) const
 	return m * GetInterpolatedPosition();
 }
 
+vector3d Body::GetInterpolatedPositionRelTo(const Body *relTo) const
+{
+	return GetInterpolatedPositionRelTo(relTo->GetFrame()) - relTo->GetInterpolatedPosition();
+}
+
 vector3d Body::GetPositionRelTo(const Body *relTo) const
 {
 	return GetPositionRelTo(relTo->GetFrame()) - relTo->GetPosition();
 }
 
-const vector3d& Body::GetProjectedPos() const
-{
-	assert(IsOnscreen());
-	return m_projectedPos;
-}
-
 void Body::OrientOnSurface(double radius, double latitude, double longitude)
 {
-	vector3d pos = vector3d(radius*cos(latitude)*cos(longitude), radius*sin(latitude)*cos(longitude), radius*sin(longitude));
-	vector3d up = pos.Normalized();
+	vector3d up = vector3d(cos(latitude)*cos(longitude), sin(latitude)*cos(longitude), sin(longitude));
+	vector3d pos = radius * up;
 	SetPosition(pos);
 
 	vector3d forward = vector3d(0,0,1);
@@ -174,7 +170,7 @@ void Body::UpdateFrame()
 	// falling out of frames
 	if (!GetFrame()->IsLocalPosInFrame(GetPosition())) {
 		printf("%s leaves frame %s\n", GetLabel().c_str(), GetFrame()->GetLabel());
-			
+
 		Frame *new_frame = GetFrame()->m_parent;
 		if (new_frame) { // don't let fall out of root frame
 			matrix4x4d m = matrix4x4d::Identity();
@@ -192,6 +188,9 @@ void Body::UpdateFrame()
 
 			SetFrame(new_frame);
 			SetPosition(new_pos);
+
+			Pi::luaOnFrameChanged->Queue(this);
+			
 			return;
 		}
 	}
@@ -218,7 +217,13 @@ void Body::UpdateFrame()
 		SetVelocity(m*(GetVelocity() - kid->GetVelocity())
 			+ kid->GetStasisVelocityAtPosition(pos));
 
+		Pi::luaOnFrameChanged->Queue(this);
+
 		break;
 	}
 }
 
+vector3d Body::GetTargetIndicatorPosition(const Frame *relTo) const
+{
+	return GetInterpolatedPositionRelTo(relTo);
+}
