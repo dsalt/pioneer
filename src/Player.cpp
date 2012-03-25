@@ -24,6 +24,9 @@ Player::Player(ShipType::Type shipType): Ship(shipType)
 	m_combatTarget = 0;
 	UpdateMass();
 
+	float deadzone = Pi::config->Float("JoystickDeadzone");
+	m_joystickDeadzone = deadzone * deadzone;
+
 	m_accumTorque = vector3d(0,0,0);
 }
 
@@ -81,21 +84,19 @@ bool Player::OnDamage(Object *attacker, float kgDamage)
 
 void Player::SetFlightControlState(enum FlightControlState s)
 {
-	m_flightControlState = s;
-	if (m_flightControlState == CONTROL_AUTOPILOT) {
+	if (m_flightControlState != s) {
+		m_flightControlState = s;
 		AIClearInstructions();
-	} else if (m_flightControlState == CONTROL_FIXSPEED) {
-		AIClearInstructions();
-		m_setSpeed = m_setSpeedTarget ? GetVelocityRelTo(m_setSpeedTarget).Length() : GetVelocity().Length();
-	} else {
-		AIClearInstructions();
+		if (m_flightControlState == CONTROL_FIXSPEED) {
+			m_setSpeed = m_setSpeedTarget ? GetVelocityRelTo(m_setSpeedTarget).Length() : GetVelocity().Length();
+		}
+		Pi::onPlayerChangeFlightControlState.emit();
 	}
-	Pi::onPlayerChangeFlightControlState.emit();
 }
 
-void Player::Render(const vector3d &viewCoords, const matrix4x4d &viewTransform)
+void Player::Render(Graphics::Renderer *r, const vector3d &viewCoords, const matrix4x4d &viewTransform)
 {
-	if (!IsDead()) Ship::Render(viewCoords, viewTransform);
+	if (!IsDead()) Ship::Render(r, viewCoords, viewTransform);
 }
 
 void Player::SetDockedWith(SpaceStation *s, int port)
@@ -116,19 +117,26 @@ void Player::StaticUpdate(const float timeStep)
 	vector3d v;
 	matrix4x4d m;
 
-	Ship::StaticUpdate(timeStep);		// also calls autopilot AI
-
 	if (GetFlightState() == Ship::FLYING) {
 		switch (m_flightControlState) {
 		case CONTROL_FIXSPEED:
 			if (Pi::GetView() == Pi::worldView) PollControls(timeStep);
-			if (IsAnyThrusterKeyDown()) break;
+			if (IsAnyLinearThrusterKeyDown()) break;
 			GetRotMatrix(m);
 			v = m * vector3d(0, 0, -m_setSpeed);
 			if (m_setSpeedTarget) {
 				v += m_setSpeedTarget->GetVelocityRelTo(GetFrame());
 			}
 			AIMatchVel(v);
+			break;
+		case CONTROL_FIXHEADING_FORWARD:
+		case CONTROL_FIXHEADING_BACKWARD:
+			if (Pi::GetView() == Pi::worldView) PollControls(timeStep);
+			if (IsAnyAngularThrusterKeyDown()) break;
+			v = GetVelocity().NormalizedSafe();
+			if (m_flightControlState == CONTROL_FIXHEADING_BACKWARD)
+				v = -v;
+			AIFaceDirection(v);
 			break;
 		case CONTROL_MANUAL:
 			if (Pi::GetView() == Pi::worldView) PollControls(timeStep);
@@ -143,10 +151,13 @@ void Player::StaticUpdate(const float timeStep)
 			else SetFlightControlState(CONTROL_MANUAL);
 			m_setSpeed = 0.0;
 			break;
+		default: assert(0); break;
 		}
 	}
 	else SetFlightControlState(CONTROL_MANUAL);
 	
+	Ship::StaticUpdate(timeStep);		// also calls autopilot AI
+
 	/* This wank probably shouldn't be in Player... */
 	/* Ship engine noise. less loud inside */
 	float v_env = (Pi::worldView->GetCamType() == WorldView::CAM_EXTERNAL ? 1.0f : 0.5f) * Sound::GetSfxVolume();
@@ -214,19 +225,22 @@ void Player::PollControls(const float timeStep)
 			}
 			vector3d objDir = m_mouseDir * rot;
 
-			const double radiansPerPixel = 0.002;
+			const float fovY = Pi::config->Float("FOVVertical");
+			const double radiansPerPixel = 0.00002 * fovY;
+			const int maxMotion = std::max(abs(mouseMotion[0]), abs(mouseMotion[1]));
+			const double accel = Clamp(maxMotion / 4.0, 0.0, 90.0 / fovY);
 
-			m_mouseX += mouseMotion[0] * radiansPerPixel;
+			m_mouseX += mouseMotion[0] * accel * radiansPerPixel;
 			double modx = clipmouse(objDir.x, m_mouseX);			
 			m_mouseX -= modx;
 
 			const bool invertY = (Pi::IsMouseYInvert() ? !m_invertMouse : m_invertMouse);
 
-			m_mouseY += mouseMotion[1] * radiansPerPixel * (invertY ? -1 : 1);
+			m_mouseY += mouseMotion[1] * accel * radiansPerPixel * (invertY ? -1 : 1);
 			double mody = clipmouse(objDir.y, m_mouseY);
 			m_mouseY -= mody;
 
-			if(!float_is_zero_general(modx) || !float_is_zero_general(mody)) {
+			if(!is_zero_general(modx) || !is_zero_general(mody)) {
 				matrix4x4d mrot = matrix4x4d::RotateYMatrix(modx); mrot.RotateX(mody);
 				m_mouseDir = (rot * (mrot * objDir)).Normalized();
 			}
@@ -280,16 +294,24 @@ void Player::PollControls(const float timeStep)
 				angThrustSoftness = 10.0;
 		}
 
-		wantAngVel.x += 2 * KeyBindings::pitchAxis.GetValue();
-		wantAngVel.y += 2 * KeyBindings::yawAxis.GetValue();
-		wantAngVel.z += 2 * KeyBindings::rollAxis.GetValue();
+		vector3d changeVec;
+		changeVec.x = KeyBindings::pitchAxis.GetValue();
+		changeVec.y = KeyBindings::yawAxis.GetValue();
+		changeVec.z = KeyBindings::rollAxis.GetValue();
+
+		// Deadzone
+		if(changeVec.LengthSqr() < m_joystickDeadzone)
+			changeVec = vector3d(0.0);
+
+		changeVec *= 2.0;
+		wantAngVel += changeVec;
 
 		double invTimeAccelRate = 1.0 / Pi::game->GetTimeAccelRate();
 		for (int axis=0; axis<3; axis++)
 			wantAngVel[axis] = Clamp(wantAngVel[axis], -invTimeAccelRate, invTimeAccelRate);
 		
+		AIModelCoordsMatchAngVel(wantAngVel, angThrustSoftness);
 		if (m_mouseActive) AIFaceDirection(m_mouseDir);
-		else AIModelCoordsMatchAngVel(wantAngVel, angThrustSoftness);
 	}
 }
 
@@ -341,7 +363,19 @@ void Player::SetAlertState(Ship::AlertState as)
 	Ship::SetAlertState(as);
 }
 
-bool Player::IsAnyThrusterKeyDown()
+bool Player::IsAnyAngularThrusterKeyDown()
+{
+	return !Pi::IsConsoleActive() && (
+		KeyBindings::pitchUp.IsActive()   ||
+		KeyBindings::pitchDown.IsActive() ||
+		KeyBindings::yawLeft.IsActive()   ||
+		KeyBindings::yawRight.IsActive()  ||
+		KeyBindings::rollLeft.IsActive()  ||
+		KeyBindings::rollRight.IsActive()
+	);
+}
+
+bool Player::IsAnyLinearThrusterKeyDown()
 {
 	return !Pi::IsConsoleActive() && (
 		KeyBindings::thrustForward.IsActive()	||
@@ -445,6 +479,8 @@ void Player::OnEnterHyperspace()
 {
 	SetNavTarget(0);
 	SetCombatTarget(0);
+
+	Pi::worldView->HideTargetActions(); // hide the comms menu
 
 	if (Pi::player->GetFlightControlState() == Player::CONTROL_AUTOPILOT)
 		Pi::player->SetFlightControlState(Player::CONTROL_MANUAL);

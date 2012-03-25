@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-SUBDIRS = collider gui render terrain
+SUBDIRS = collider gui graphics terrain
 
 include $(top_srcdir)/Makefile.common
 
@@ -15,6 +15,7 @@ noinst_HEADERS = \
 	BezierCurve.h \
 	Body.h \
 	BufferObject.h \
+	ByteRange.h \
 	Camera.h \
 	CargoBody.h \
 	ChatForm.h \
@@ -25,11 +26,13 @@ noinst_HEADERS = \
 	DeadVideoLink.h \
 	DeleteEmitter.h \
 	DynamicBody.h \
+	EquipSet.h \
 	EquipType.h \
 	FaceVideoLink.h \
 	FileSelectorWidget.h \
+	FileSystem.h \
 	Font.h \
-	FontManager.h \
+	FontCache.h \
 	Form.h \
 	FormController.h \
 	Frame.h \
@@ -46,6 +49,8 @@ noinst_HEADERS = \
 	FontConfig.h \
 	KeyBindings.h \
 	Lang.h \
+	LangStrings.inc.h \
+	Light.h \
 	LmrModel.h \
 	LuaBody.h \
 	LuaCargoBody.h \
@@ -82,7 +87,6 @@ noinst_HEADERS = \
 	Missile.h \
 	ModelBody.h \
 	MyLuaMathTypes.h \
-	NameGenerator.h \
 	Object.h \
 	ObjectViewerView.h \
 	PersistSystemData.h \
@@ -109,6 +113,7 @@ noinst_HEADERS = \
 	StationShipViewForm.h \
 	StationShipyardForm.h \
 	StringF.h \
+	StringRange.h \
 	Sfx.h \
 	Ship.h \
 	ShipAICmd.h \
@@ -129,7 +134,7 @@ noinst_HEADERS = \
 	SystemView.h \
 	TerrainBody.h \
 	TextureFont.h \
-	TextureManager.h \
+	TextSupport.h \
 	VectorFont.h \
 	VideoLink.h \
 	View.h \
@@ -143,6 +148,7 @@ noinst_HEADERS = \
 	mtrand.h \
 	perlin.h \
 	utils.h \
+	vector2.h \
 	vector3.h \
 	enum_table.h
 
@@ -152,6 +158,7 @@ pioneer_SOURCES	= \
 	Body.cpp \
 	Camera.cpp \
 	CargoBody.cpp \
+	Color.cpp \
 	ChatForm.cpp \
 	CityOnPlanet.cpp \
 	CommodityTradeWidget.cpp \
@@ -161,8 +168,9 @@ pioneer_SOURCES	= \
 	EquipType.cpp \
 	FaceVideoLink.cpp \
 	FileSelectorWidget.cpp \
+	FileSystem.cpp \
 	Font.cpp \
-	FontManager.cpp \
+	FontCache.cpp \
 	FormController.cpp \
 	Frame.cpp \
 	GalacticView.cpp \
@@ -177,6 +185,7 @@ pioneer_SOURCES	= \
 	GameConfig.cpp \
 	FontConfig.cpp \
 	KeyBindings.cpp \
+	Light.cpp \
 	Lang.cpp \
 	LmrModel.cpp \
 	LuaBody.cpp \
@@ -214,7 +223,6 @@ pioneer_SOURCES	= \
 	Missile.cpp \
 	ModelBody.cpp \
 	MyLuaMathTypes.cpp \
-	NameGenerator.cpp \
 	ObjectViewerView.cpp \
 	Pi.cpp \
 	PiLuaClasses.cpp \
@@ -256,7 +264,7 @@ pioneer_SOURCES	= \
 	SystemView.cpp \
 	TerrainBody.cpp \
 	TextureFont.cpp \
-	TextureManager.cpp \
+	TextSupport.cpp \
 	VectorFont.cpp \
 	WorldView.cpp \
 	main.cpp \
@@ -265,8 +273,7 @@ pioneer_SOURCES	= \
 	utils.cpp \
 	enum_table.cpp
 
-pioneer_LDADD = ../contrib/oolua/liboolua.a collider/libcollider.a gui/libgui.a render/librender.a terrain/libterrain.a \
-		$(MINGW_LIBS) \
+pioneer_LDADD = ../contrib/oolua/liboolua.a collider/libcollider.a gui/libgui.a graphics/libgraphics.a terrain/libterrain.a \
 		$(FREETYPE_LIBS) $(GLEW_LIBS) $(GLU_LIBS) $(GL_LIBS) \
 		$(SDL_LIBS) $(SIGC_LIBS) $(LUA_LIBS) $(VORBIS_LIBS) \
 		$(PNG_LIBS)
@@ -275,10 +282,12 @@ pioneer_LDADD += ../contrib/lua/liblua.a
 endif
 
 modelviewer_SOURCES = \
+	Color.cpp \
 	Font.cpp \
+	FileSystem.cpp \
 	IniConfig.cpp \
 	FontConfig.cpp \
-	FontManager.cpp \
+	FontCache.cpp \
 	Lang.cpp \
 	LmrModel.cpp \
 	LuaModelViewer.cpp \
@@ -289,13 +298,12 @@ modelviewer_SOURCES = \
 	MyLuaMathTypes.cpp \
 	StringF.cpp \
 	TextureFont.cpp \
-	TextureManager.cpp \
+	TextSupport.cpp \
 	VectorFont.cpp \
 	perlin.cpp \
 	utils.cpp \
 	enum_table.cpp
-modelviewer_LDADD = collider/libcollider.a gui/libgui.a render/librender.a terrain/libterrain.a \
-		    $(MINGW_LIBS) \
+modelviewer_LDADD = collider/libcollider.a gui/libgui.a graphics/libgraphics.a terrain/libterrain.a \
 		    $(FREETYPE_LIBS) $(GLEW_LIBS) $(GLU_LIBS) $(GL_LIBS) \
 		    $(SDL_LIBS) $(SIGC_LIBS) $(LUA_LIBS) $(PNG_LIBS)
 if !HAVE_LUA
@@ -307,13 +315,27 @@ tests_SOURCES = \
 	StringF.cpp \
 	tests.cpp \
 	test_Frame.cpp \
-	test_StringF.cpp
+	test_StringF.cpp \
+	FileSystem.cpp \
+	FileSystemPosix.cpp \
+	test_FileSystem.cpp
 
 TESTS = tests
  
-tests_LDADD = collider/libcollider.a gui/libgui.a render/librender.a terrain/libterrain.a
+tests_LDADD = collider/libcollider.a gui/libgui.a graphics/libgraphics.a terrain/libterrain.a
 
 INCLUDES = -isystem @top_srcdir@/contrib
 if !HAVE_LUA
 INCLUDES += -isystem @top_srcdir@/contrib/lua
 endif
+
+if BUILD_WIN32
+    pioneer_LDADD += ../win32/src/libwin32.a $(MINGW_LIBS)
+    modelviewer_LDADD += ../win32/src/libwin32.a $(MINGW_LIBS)
+endif
+
+if BUILD_POSIX
+    pioneer_SOURCES += FileSystemPosix.cpp
+    modelviewer_SOURCES += FileSystemPosix.cpp
+endif
+

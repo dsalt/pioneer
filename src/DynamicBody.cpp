@@ -111,6 +111,13 @@ vector3d DynamicBody::GetPosition() const
 	return vector3d(m_orient[12], m_orient[13], m_orient[14]);
 }
 
+matrix4x4d DynamicBody::GetTransformRelTo(const Frame* relTo) const
+{
+	matrix4x4d m;
+	Frame::GetFrameTransform(GetFrame(), relTo, m);
+	return m * m_orient;
+}
+
 void DynamicBody::CalcExternalForce()
 {
 	// gravity
@@ -188,8 +195,9 @@ void DynamicBody::TimeStepUpdate(const float timeStep)
 		m_orient[14] = pos.z;
 		TriMeshUpdateLastPos(m_orient);
 
-//printf("vel = %.1f,%.1f,%.1f, force = %.1f,%.1f,%.1f, external = %.1f,%.1f,%.1f\n",
-//	m_vel.x, m_vel.y, m_vel.z, m_force.x, m_force.y, m_force.z,
+//if (this->IsType(Object::PLAYER))
+//printf("pos = %.1f,%.1f,%.1f, vel = %.1f,%.1f,%.1f, force = %.1f,%.1f,%.1f, external = %.1f,%.1f,%.1f\n",
+//	pos.x, pos.y, pos.z, m_vel.x, m_vel.y, m_vel.z, m_force.x, m_force.y, m_force.z,
 //	m_externalForce.x, m_externalForce.y, m_externalForce.z);
 
 		m_lastForce = m_force;
@@ -203,21 +211,6 @@ void DynamicBody::TimeStepUpdate(const float timeStep)
 	}
 }
 
-// for timestep changes, to stop autopilot overshoot
-// either adds half of current accel or removes all of current accel 
-void DynamicBody::ApplyAccel(const float timeStep)
-{
-	vector3d vdiff = double(timeStep) * m_lastForce * (1.0 / m_mass);
-	double spd = m_vel.LengthSqr();
-	if ((m_vel-2.0*vdiff).LengthSqr() < spd) m_vel -= 2.0*vdiff;
-	else if ((m_vel+vdiff).LengthSqr() < spd) m_vel += vdiff;
-
-	vector3d avdiff = double(timeStep) * m_lastTorque * (1.0 / m_angInertia);
-	double aspd = m_angVel.LengthSqr();
-	if ((m_angVel-2.0*avdiff).LengthSqr() < aspd) m_angVel -= 2.0*avdiff;
-	else if ((m_angVel+avdiff).LengthSqr() < aspd) m_angVel += avdiff;
-}
-
 void DynamicBody::UpdateInterpolatedTransform(double alpha)
 {
 	// interpolating matrices like this is a sure sign of madness
@@ -227,7 +220,7 @@ void DynamicBody::UpdateInterpolatedTransform(double alpha)
 	m_interpolatedTransform = m_oldOrient;
 	{
 		double len = m_oldAngDisplacement.Length() * double(alpha);
-		if (! float_is_zero_general(len)) {
+		if (! is_zero_general(len)) {
 			vector3d rotAxis = m_oldAngDisplacement.Normalized();
 			matrix4x4d rotMatrix = matrix4x4d::RotateMatrix(len,
 					rotAxis.x, rotAxis.y, rotAxis.z);

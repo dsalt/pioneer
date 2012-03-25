@@ -215,8 +215,6 @@ OTHER_GRAPHICS_SETTINGS
     Weitere Grafikeinstellungen
 USE_SHADERS
     Pixel-Shader aktivieren
-USE_HDR
-    HDR-Beleuchtung aktivieren
 SOUND_SETTINGS
     Sound-Einstellungen
 VOL_MASTER
@@ -919,10 +917,6 @@ VAST_STRIP_MINE
     Riesige Tagebau Kolonie.
 HIGH_POPULATION_OUTDOOR_WORLD
     Planet mit hoher Bevölkerungsdichte und Städten unter freiem Himmel.
-SOMEWHERE_SPACEPORT
-    %spaceport Raumhafen
-SOMEWHERE_STARPORT
-    %starport Sternhafen
 MASS
     Masse
 N_WHATEVER_MASSES

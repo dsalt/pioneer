@@ -481,10 +481,10 @@ void LuaConstants::Register(lua_State *l)
 	 *
 	 * REVERSE - front (fore) thruster
 	 * FORWARD - main/rear (aft) thruster
-	 * UP - bottom/underbelly (dorsal) thruster
-	 * DOWN - top/back (ventral) thruster
+	 * UP - bottom/underbelly (ventral) thruster
+	 * DOWN - top/back (dorsal) thruster
 	 * LEFT - right-side (starboard) thruster
-	 * RIGHT -left-side (port) thruster
+	 * RIGHT - left-side (port) thruster
 	 *
 	 * Availability:
 	 *
@@ -501,14 +501,17 @@ void LuaConstants::Register(lua_State *l)
 	 * Constants: ShipJumpStatus
 	 *
 	 * Reasons that that a hyperspace jump might succeed or fail. Returned by
-	 * <Ship.HyperspaceTo> and <Ship.CanHyperspaceTo>.
+	 * <Ship.HyperspaceTo>, <Ship.CheckHyperspaceTo> and <Ship.GetHyperspaceDetails>.
 	 *
 	 * OK - jump successful
 	 * CURRENT_SYSTEM - ship is already in the target system
 	 * NO_DRIVE - ship has no drive
+	 * DRIVE_ACTIVE - ship is already in hyperspace
 	 * OUT_OF_RANGE - target system is out of range
 	 * INSUFFICIENT_FUEL - target system is in range but the ship doesn't have
 	 *                     enough fuel
+	 * SAFETY_LOCKOUT - drive locked out for safety reasons
+	 *                  (currently this happens if landed, docked or docking)
 	 *
 	 * Availability:
 	 *
@@ -539,6 +542,25 @@ void LuaConstants::Register(lua_State *l)
 	 *   experimental
 	 */
 	_create_constant_table_nonconsecutive(l, "ShipAlertStatus", ENUM_ShipAlertStatus);
+
+	/*
+	 * Constants: ShipFuelStatus
+	 *
+	 * Current fuel status.
+	 *
+	 * OK - more than 5% fuel remaining
+	 * WARNING - less than 5% fuel remaining
+	 * EMPTY - no fuel remaining
+	 *
+	 * Availability:
+	 *
+	 *   alpha 20
+	 *
+	 * Status:
+	 *
+	 *   experimental
+	 */
+	_create_constant_table_nonconsecutive(l, "ShipFuelStatus", ENUM_ShipFuelStatus);
 
 	/*
 	 * Constants: ShipFlightState

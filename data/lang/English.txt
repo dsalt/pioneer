@@ -221,9 +221,7 @@ FULL_SCREEN
 OTHER_GRAPHICS_SETTINGS
     Other graphics settings
 USE_SHADERS
-    Use shaders
-USE_HDR
-    Use HDR Lighting (looks cool)
+    Use shaders (restart to apply)
 SOUND_SETTINGS
     Sound settings
 VOL_MASTER
@@ -464,6 +462,8 @@ CARGO_INVENTORY
     Cargo Inventory:
 JETTISON
     Jettison
+REFUEL
+    Refuel
 JETTISONED_1T_OF_X
     Jettisoned 1 tonne of %commodity
 COMBAT_RATING
@@ -608,6 +608,8 @@ MM_START_NEW_GAME_EARTH
     New game starting on Earth
 MM_START_NEW_GAME_E_ERIDANI
     New game starting on Epsilon Eridani
+MM_START_NEW_GAME_LAVE
+    New game starting at Lave
 MM_START_NEW_GAME_DEBUG
     New game starting on debug point
 MM_LOAD_SAVED_GAME
@@ -738,6 +740,8 @@ REAR_VIEW
     Rear view
 EXTERNAL_VIEW
     External view
+SIDEREAL_VIEW
+    Sidereal view
 NAVIGATION_STAR_MAPS
     Navigation and star maps
 COMMS
@@ -944,10 +948,6 @@ VAST_STRIP_MINE
     Vast strip-mining colony.
 HIGH_POPULATION_OUTDOOR_WORLD
     High population outdoor world.
-SOMEWHERE_SPACEPORT
-    %spaceport Spaceport
-SOMEWHERE_STARPORT
-    %starport Starport
 MASS
     Mass
 N_WHATEVER_MASSES
@@ -1060,6 +1060,8 @@ MANUAL_CONTROL
     Manual control
 COMPUTER_SPEED_CONTROL
     Computer speed control
+COMPUTER_HEADING_CONTROL
+    Computer heading control
 AUTOPILOT_ON
     Autopilot on
 SHIP_VELOCITY_BY_REFERENCE_OBJECT
@@ -1078,6 +1080,8 @@ HULL_INTEGRITY
     Hull integrity
 SHIELD_INTEGRITY
     Shield integrity
+FUEL
+    Fuel
 LAUNCH_PERMISSION_DENIED_BUSY
     Permission to launch denied: docking bay busy.
 HYPERSPACE_JUMP_ABORTED
@@ -1090,6 +1094,10 @@ DOCKED
     Docked
 HYPERSPACE
     Hyperspace
+HEADING_LOCK_FORWARD
+    Heading Lock (fore)
+HEADING_LOCK_BACKWARD
+    Heading Lock (aft)
 SET_SPEED_KM_S
     Set speed: %speed{f.2} km/s
 SET_SPEED_M_S

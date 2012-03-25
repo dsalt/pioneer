@@ -1,7 +1,8 @@
 #include "StarSystem.h"
 #include "Sector.h"
 #include "Serializer.h"
-#include "NameGenerator.h"
+#include "Pi.h"
+#include "LuaNameGen.h"
 #include <map>
 #include "utils.h"
 #include "Lang.h"
@@ -944,7 +945,10 @@ void StarSystem::CustomGetKidsOf(SBody *parent, const std::list<CustomSBody> *ch
 		kid->orbit.eccentricity = csbody->eccentricity.ToDouble();
 		kid->orbit.semiMajorAxis = csbody->semiMajorAxis.ToDouble() * AU;
 		kid->orbit.period = calc_orbital_period(kid->orbit.semiMajorAxis, parent->GetMass());
-		if (csbody->heightMapFilename.length() > 0) kid->heightMapFilename = csbody->heightMapFilename.c_str();
+		if (csbody->heightMapFilename.length() > 0) {
+			kid->heightMapFilename = csbody->heightMapFilename.c_str(); 
+			kid->heightMapFractal = csbody->heightMapFractal;
+		}
 
 		if (kid->type == SBody::TYPE_STARPORT_SURFACE) {
 			kid->orbit.rotMatrix = matrix4x4d::RotateYMatrix(csbody->longitude) *
@@ -1062,6 +1066,7 @@ void StarSystem::MakeBinaryPair(SBody *a, SBody *b, fixed minDist, MTRand &rand)
 SBody::SBody()
 {
 	heightMapFilename = 0;
+	heightMapFractal = 0;
 }
 
 void SBody::PickAtmosphere()
@@ -1193,6 +1198,7 @@ StarSystem::StarSystem(const SystemPath &path) : m_path(path)
 		m_numStars = custom->numStars;
 		if (custom->shortDesc.length() > 0) m_shortDesc = custom->shortDesc;
 		if (custom->longDesc.length() > 0) m_longDesc = custom->longDesc;
+		if (!custom->want_rand_explored) m_unexplored = !custom->explored;
 		if (!custom->IsRandom()) {
 			m_hasCustomBodies = true;
 			GenerateFromCustom(s.m_systems[m_path.systemIndex].customSys, rand);
@@ -1595,7 +1601,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 	else
 		radius = fixed::CubeRootOf(mass);
 	// enforce minimum size of 10km
-	radius = std::max(radius, fixed(1,630000));
+	radius = std::max(radius, fixed(1,630));
 
 	m_metallicity = system->m_metallicity * rand.Fixed();
 	// harder to be volcanic when you are tiny (you cool down)
@@ -1793,8 +1799,10 @@ void SBody::PopulateStage1(StarSystem *system, fixed &outTotalPop)
 
 	unsigned long _init[6] = { system->m_path.systemIndex, system->m_path.sectorX,
 			system->m_path.sectorY, system->m_path.sectorZ, UNIVERSE_SEED, this->seed };
-	MTRand rand;
+
+	MTRand rand, namerand;
 	rand.seed(_init, 6);
+	namerand.seed(_init, 6);
 
 	m_population = fixed(0);
 
@@ -1871,8 +1879,8 @@ void SBody::PopulateStage1(StarSystem *system, fixed &outTotalPop)
 		}
 	}
 
-	if (!system->m_hasCustomBodies && m_population > fixed(1,10))
-		name = NameGenerator::PlanetName(rand);
+	if (!system->m_hasCustomBodies && m_population > 0)
+		name = Pi::luaNameGen->BodyName(this, namerand);
 	
 	// Add a bunch of things people consume
 	for (int i=0; i<NUM_CONSUMABLES; i++) {
@@ -1902,10 +1910,13 @@ void SBody::PopulateAddStations(StarSystem *system)
 	for (unsigned int i=0; i<children.size(); i++) {
 		children[i]->PopulateAddStations(system);
 	}
+
 	unsigned long _init[6] = { system->m_path.systemIndex, system->m_path.sectorX,
 			system->m_path.sectorY, system->m_path.sectorZ, this->seed, UNIVERSE_SEED };
-	MTRand rand;
+
+	MTRand rand, namerand;
 	rand.seed(_init, 6);
+	namerand.seed(_init, 6);
 
 	if (m_population < fixed(1,1000)) return;
 
@@ -1927,7 +1938,6 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->rotationPeriod = fixed(1,3600);
 		sp->averageTemp = this->averageTemp;
 		sp->mass = 0;
-		sp->name = stringf(Lang::SOMEWHERE_SPACEPORT, formatarg("spaceport", NameGenerator::Surname(rand)));
 		/* just always plonk starports in near orbit */
 		sp->semiMajorAxis = orbMinS;
 		sp->eccentricity = fixed(0);
@@ -1941,6 +1951,8 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->orbMin = sp->semiMajorAxis;
 		sp->orbMax = sp->semiMajorAxis;
 
+		sp->name = Pi::luaNameGen->BodyName(sp, namerand);
+
 		pop -= rand.Fixed();
 		if (pop > 0) {
 			SBody *sp2 = system->NewBody();
@@ -1948,7 +1960,7 @@ void SBody::PopulateAddStations(StarSystem *system)
 			*sp2 = *sp;
 			sp2->path = path2;
 			sp2->orbit.rotMatrix = matrix4x4d::RotateZMatrix(M_PI);
-			sp2->name = stringf(Lang::SOMEWHERE_SPACEPORT, formatarg("spaceport", NameGenerator::Surname(rand)));
+			sp2->name = Pi::luaNameGen->BodyName(sp2, namerand);
 			children.insert(children.begin(), sp2);
 			system->m_spaceStations.push_back(sp2);
 		}
@@ -1967,7 +1979,7 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->parent = this;
 		sp->averageTemp = this->averageTemp;
 		sp->mass = 0;
-		sp->name = stringf(Lang::SOMEWHERE_STARPORT, formatarg("starport", NameGenerator::Surname(rand)));
+		sp->name = Pi::luaNameGen->BodyName(sp, namerand);
 		memset(&sp->orbit, 0, sizeof(Orbit));
 		position_settlement_on_planet(sp);
 		children.insert(children.begin(), sp);

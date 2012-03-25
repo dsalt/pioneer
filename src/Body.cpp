@@ -77,7 +77,8 @@ Body *Body::Unserialize(Serializer::Reader &_rd, Space *space)
 		case Object::STAR:
 			b = new Star(); break;
 		case Object::PLANET:
-			b = new Planet(); break;
+			b = new Planet();
+			break;
 		case Object::SPACESTATION:
 			b = new SpaceStation(); break;
 		case Object::SHIP:
@@ -131,6 +132,13 @@ vector3d Body::GetInterpolatedPositionRelTo(const Body *relTo) const
 vector3d Body::GetPositionRelTo(const Body *relTo) const
 {
 	return GetPositionRelTo(relTo->GetFrame()) - relTo->GetPosition();
+}
+
+matrix4x4d Body::GetInterpolatedTransformRelTo(const Frame *relTo) const
+{
+	matrix4x4d m;
+	Frame::GetFrameRenderTransform(m_frame, relTo, m);
+	return m * GetInterpolatedTransform();
 }
 
 void Body::OrientOnSurface(double radius, double latitude, double longitude)

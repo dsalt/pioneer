@@ -1,17 +1,24 @@
 #include "libs.h"
 #include <map>
-#include "FontManager.h"
+#include "FontCache.h"
 #include "VectorFont.h"
 #include "LmrModel.h"
 #include "collider/collider.h"
 #include "perlin.h"
-#include "render/Render.h"
 #include "BufferObject.h"
 #include "LuaUtils.h"
 #include "LuaConstants.h"
 #include "EquipType.h"
+#include "EquipSet.h"
 #include "ShipType.h"
-#include "TextureManager.h"
+#include "FileSystem.h"
+#include "graphics/Graphics.h"
+#include "graphics/Material.h"
+#include "graphics/Renderer.h"
+#include "graphics/Shader.h"
+#include "graphics/VertexArray.h"
+#include "graphics/TextureBuilder.h"
+#include "graphics/TextureGL.h" // XXX temporary until LMR uses renderer drawing properly
 #include <set>
 #include <algorithm>
 
@@ -37,104 +44,100 @@ struct RenderState {
 struct LmrUnknownMaterial {};
 
 namespace ShipThruster {
+	//vertices for thruster flare & glow
+	static Graphics::VertexArray *tVerts;
+	static Graphics::VertexArray *gVerts;
+	static Graphics::Material tMat;
+	static Graphics::Material glowMat;
+	//cool purple-ish
+	static Color color(0.7f, 0.6f, 1.f, 1.f);
+
+	static const std::string thrusterTextureFilename("textures/thruster.png");
+	static const std::string thrusterGlowTextureFilename("textures/halo.png");
+
+	static void Init(Graphics::Renderer *renderer) {
+		tVerts = new Graphics::VertexArray(Graphics::ATTRIB_POSITION | Graphics::ATTRIB_UV0);
+		gVerts = new Graphics::VertexArray(Graphics::ATTRIB_POSITION | Graphics::ATTRIB_UV0);
+
+		//set up materials
+		tMat.texture0 = Graphics::TextureBuilder::Billboard(thrusterTextureFilename).GetOrCreateTexture(renderer, "billboard");
+		tMat.unlit = true;
+		tMat.twoSided = true;
+		tMat.diffuse = color;
+
+		glowMat.texture0 = Graphics::TextureBuilder::Billboard(thrusterGlowTextureFilename).GetOrCreateTexture(renderer, "billboard");
+		glowMat.unlit = true;
+		glowMat.twoSided = true;
+		glowMat.diffuse = color;
+
+		//zero at thruster center
+		//+x down
+		//+y right
+		//+z backwards (or thrust direction)
+		const float w = 0.5f;
+
+		vector3f one(0.f, -w, 0.f); //top left
+		vector3f two(0.f,  w, 0.f); //top right
+		vector3f three(0.f,  w, 1.f); //bottom right
+		vector3f four(0.f, -w, 1.f); //bottom left
+
+		//uv coords
+		const vector2f topLeft(0.f, 1.f);
+		const vector2f topRight(1.f, 1.f);
+		const vector2f botLeft(0.f, 0.f);
+		const vector2f botRight(1.f, 0.f);
+
+		//add four intersecting planes to create a volumetric effect
+		for (int i=0; i < 4; i++) {
+			tVerts->Add(one, topLeft);
+			tVerts->Add(two, topRight);
+			tVerts->Add(three, botRight);
+
+			tVerts->Add(three, botRight);
+			tVerts->Add(four, botLeft);
+			tVerts->Add(one, topLeft);
+
+			one.ArbRotate(vector3f(0.f, 0.f, 1.f), DEG2RAD(45.f));
+			two.ArbRotate(vector3f(0.f, 0.f, 1.f), DEG2RAD(45.f));
+			three.ArbRotate(vector3f(0.f, 0.f, 1.f), DEG2RAD(45.f));
+			four.ArbRotate(vector3f(0.f, 0.f, 1.f), DEG2RAD(45.f));
+		}
+
+		//create glow billboard for linear thrusters
+		const float gw = 1.0f; //0.4
+
+		const vector3f gone(-gw, -gw, 0.f); //top left
+		const vector3f gtwo(-gw,  gw, 0.f); //top right
+		const vector3f gthree(gw, gw, 0.f); //bottom right
+		const vector3f gfour(gw, -gw, 0.f); //bottom left
+
+		gVerts->Add(gone, topLeft);
+		gVerts->Add(gtwo, topRight);
+		gVerts->Add(gthree, botRight);
+
+		gVerts->Add(gthree, botRight);
+		gVerts->Add(gfour, botLeft);
+		gVerts->Add(gone, topLeft);
+	}
+
+	static void Uninit() {
+		delete tVerts;
+		delete gVerts;
+	}
+
 	struct Thruster
 	{
-		Thruster() : pos(0.0), dir(0.0), power(0) {}	// zero this shit to stop denormal-copying on resize
+		Thruster() : m_pos(0.0), m_dir(0.0), m_power(0) {}	// zero this shit to stop denormal-copying on resize
 		// cannot be used as an angular thruster
-		bool linear_only;
-		vector3f pos;
-		vector3f dir;
-		float power;
+		bool m_linear_only;
+		vector3f m_pos;
+		vector3f m_dir;
+		float m_power;
+		void Render(Graphics::Renderer *r, const RenderState *rstate, const LmrObjParams *params);
 	};
 
-	
-	static vector3f ResolveHermiteSpline (const vector3f &p0, const vector3f &p1, const vector3f &n0, const vector3f &n1, float t)
+	void Thruster::Render(Graphics::Renderer *renderer, const RenderState *rstate, const LmrObjParams *params)
 	{
-		float t2 = t*t, t3 = t*t*t;
-		vector3f tv1, tv2, tv;
-		tv1 = p0 * (2*t3-3*t2+1);
-		tv = n0 * (t3-2*t2+t);
-		tv1 = tv+tv1;
-		tv2 = p1 * (-2*t3+3*t2);
-		tv = n1 *  (t3-t2);
-		tv2 = tv + tv2;
-		return tv1 + tv2;
-	}
-
-	static const int pNumIndex[3] =
-		{ (2*4+1*8)*3, (2*8+5*16)*3, (2*16+13*32)*3 };
-
-	static vector3f pTVertex4pt[2*4+2];
-	static vector3f pTVertex8pt[6*8+2];
-	static vector3f pTVertex16pt[14*16+2];
-
-	static Uint16 pTIndex4pt[(2*4+1*8)*3];
-	static Uint16 pTIndex8pt[(2*8+5*16)*3];
-	static Uint16 pTIndex16pt[(2*16+13*32)*3];
-
-	static vector3f *ppTVertex[3] =
-		{ pTVertex4pt, pTVertex8pt, pTVertex16pt };
-
-	static Uint16 *ppTIndex[3] =
-		{ pTIndex4pt, pTIndex8pt, pTIndex16pt };
-
-
-	static void GenerateThrusters ()
-	{
-		vector3f pos0 = vector3f(0.0f, 0.0f, 0.0f);
-		vector3f pos1 = vector3f(0.0f, 0.0f, 1.0f);
-		vector3f tan0 = vector3f(0.0f, 1.0f, 0.2f);
-		vector3f tan1 = vector3f(0.0f, -0.2f, 1.0f);
-
-		int j, n;
-		for (j=0, n=4; j<3; j++, n<<=1)
-		{
-			vector3f *pCur = ppTVertex[j];
-			float t, incstep = 1.0f / (n-1);
-			int i; for (i=0, t=incstep; i<n-2; i++, t+=incstep)
-			{
-				vector3f *pos = pCur;
-				*pos = ResolveHermiteSpline (pos0, pos1, tan0, tan1, t);
-				pCur++;
-
-				float angstep = 2.0f * 3.141592f / n, ang = angstep;
-				for (int k=1; k<n; k++, ang+=angstep, pCur++)
-				{
-					pCur->x = sin(ang) * pos->y;
-					pCur->y = cos(ang) * pos->y;
-					pCur->z = pos->z;
-				}
-			}
-			*pCur = pos0; pCur++;
-			*pCur = pos1; pCur++;
-
-			int ni=0, k;
-			Uint16 *pIndex = ppTIndex[j];
-
-			for (k=0; k<n; k++) {
-				int k1 = k+1==n ? 0 : k+1;
-				pIndex[ni++] = (n-2)*n; pIndex[ni++] = k; pIndex[ni++] = k1;
-				pIndex[ni++] = (n-2)*n+1; pIndex[ni++] = k1+(n-3)*n; pIndex[ni++] = k+(n-3)*n;
-			}
-			for (i=0; i<n-3; i++)
-			{
-				for (k=0; k<n; k++) {
-					int k1 = k+1==n ? 0 : k+1;
-					pIndex[ni++] = k+i*n; pIndex[ni++] = k+i*n+n; pIndex[ni++] = k1+i*n;
-					pIndex[ni++] = k1+i*n; pIndex[ni++] = k+i*n+n;	pIndex[ni++] = k1+i*n+n;
-				}
-			}
-		}
-	}
-
-	static const float s_black[4] = { 0, 0, 0, 0 };
-	static const float s_alpha[4] = { 0, 0, 0, 0.6 };
-	static bool inittted = false;
-
-	static void RenderThruster(const RenderState *rstate, const LmrObjParams *params, Thruster *pThruster)
-	{
-		if (!inittted) GenerateThrusters();
-		inittted = true;
 		const float scale = 1.0;
 		// to find v(0,0,0) position of root model (when putting thrusters on sub-models)
 		vector3f compos = vector3f(rstate->subTransform[12], rstate->subTransform[13], rstate->subTransform[14]);
@@ -143,11 +146,11 @@ namespace ShipThruster {
 					vector3f(rstate->subTransform[4], rstate->subTransform[5], rstate->subTransform[6]),
 					vector3f(rstate->subTransform[8], rstate->subTransform[9], rstate->subTransform[10]));
 
-		vector3f start, end, dir = pThruster->dir;
-		start = pThruster->pos * scale;
+		vector3f start, end, dir = m_dir;
+		start = m_pos * scale;
 		float power = -dir.Dot(invSubModelMat * vector3f(params->linthrust));
 
-		if (!pThruster->linear_only) {
+		if (!m_linear_only) {
 			vector3f angdir, cpos;
 			const vector3f at = invSubModelMat * vector3f(params->angthrust);
 			cpos = compos + start;
@@ -164,8 +167,8 @@ namespace ShipThruster {
 
 		if (power <= 0.001f) return;
 		power *= scale;
-		float width = sqrt(power)*pThruster->power*0.6f;
-		float len = power*pThruster->power;
+		float width = sqrt(power)*m_power*0.6f;
+		float len = power*m_power;
 		end = dir * len;
 		end += start;
 
@@ -178,9 +181,9 @@ namespace ShipThruster {
 		m[0] = v1.x; m[4] = v2.x; m[8] = dir.x;
 		m[1] = v1.y; m[5] = v2.y; m[9] = dir.y;
 		m[2] = v1.z; m[6] = v2.z; m[10] = dir.z;
-		m2 = /*objorient **/ m;
+		m2 = m;
 
-		pos = /*objorient **/ start;
+		pos = start;
 
 		m2[12] = pos.x;
 		m2[13] = pos.y;
@@ -190,38 +193,54 @@ namespace ShipThruster {
 		glMultMatrixf (&m2[0]);
 
 		glScalef (width*0.5f, width*0.5f, len*0.666f);
-		
-		if (Render::IsHDREnabled())
-			glColor4f(0.0f, 40.0f, 100.0f, 0.9f);
-		else
-			glColor4f(0.0f, 0.4f, 1.0f, 0.9f);
 
-		glVertexPointer (3, GL_FLOAT, sizeof(vector3f), pTVertex8pt);
-		glDrawElements (GL_TRIANGLES, pNumIndex[1], GL_UNSIGNED_SHORT, pTIndex8pt);
+		matrix4x4f mv;
+		glGetFloatv(GL_MODELVIEW_MATRIX, &mv[0]);
+		vector3f viewdir = vector3f(-mv[2], -mv[6], -mv[10]).Normalized();
+		vector3f cdir(0.f, 0.f, -1.f);
+		//fade thruster out, when directly facing it
+		tMat.diffuse.a = 1.0 - powf(Clamp(viewdir.Dot(cdir), 0.f, 1.f), len*2);
 
-		glScalef (2.0f, 2.0f, 1.5f);
-
-		if (Render::IsHDREnabled())
-			glColor4f(100.0f, 100.0f, 100.0f, 0.9f);
-		else
-			glColor4f(0.4f, 0.0f, 1.0f, 0.9f);
-
-		glVertexPointer (3, GL_FLOAT, sizeof(vector3f), pTVertex8pt);
-		glDrawElements (GL_TRIANGLES, pNumIndex[1], GL_UNSIGNED_SHORT, pTIndex8pt);
-
+		renderer->DrawTriangles(tVerts, &tMat);
 		glPopMatrix ();
-	}
 
-	struct CameraDistance {
-		Thruster *thruster;
-		float dist;
-	};
-	struct CameraDistanceCompare : public std::binary_function<CameraDistance, CameraDistance, bool> {
-		bool operator()(CameraDistance a, CameraDistance b)
-		{
-			return a.dist > b.dist;
+		// linear thrusters get a secondary glow billboard
+		if (m_linear_only) {
+			glowMat.diffuse.a = powf(Clamp(viewdir.Dot(cdir), 0.f, 1.f), len);
+
+			glPushMatrix();
+			matrix4x4f rot;
+			glGetFloatv(GL_MODELVIEW_MATRIX, &rot[0]);
+			rot.ClearToRotOnly();
+			rot = rot.InverseOf();
+			const float sz = 0.20f*width;
+			const vector3f rotv1 = rot * vector3f(sz, sz, 0.0f);
+			const vector3f rotv2 = rot * vector3f(sz, -sz, 0.0f);
+			const vector3f rotv3 = rot * vector3f(-sz, -sz, 0.0f);
+			const vector3f rotv4 = rot * vector3f(-sz, sz, 0.0f);
+
+			//this might seem a bit confusing, but:
+			//update glow billboard vertices so they face the camera
+			vector3f vert = start+rotv4;
+
+			gVerts->position[0] = vector3f(vert.x, vert.y, vert.z);
+			gVerts->position[5] = vector3f(vert.x, vert.y, vert.z);
+
+			vert = start+rotv3;
+			gVerts->position[1] = vector3f(vert.x, vert.y, vert.z);
+
+			vert = start+rotv2;
+			gVerts->position[2] = vector3f(vert.x, vert.y, vert.z);
+			gVerts->position[3] = vector3f(vert.x, vert.y, vert.z);
+
+			vert = start+rotv1;
+			gVerts->position[4] = vector3f(vert.x, vert.y, vert.z);
+
+			renderer->DrawTriangles(gVerts, &glowMat);
+
+			glPopMatrix();
 		}
-	};
+	}
 }
 
 class LmrGeomBuffer;
@@ -237,8 +256,8 @@ static LmrShader *s_sunlightShader[4];
 static LmrShader *s_pointlightShader[4];
 static float s_scrWidth = 800.0f;
 static bool s_buildDynamic;
-static FontManager s_fontManager;
-static VectorFont *s_font;
+static FontCache s_fontCache;
+static RefCountedPtr<VectorFont> s_font;
 static float NEWMODEL_ZBIAS = 0.0002f;
 static LmrGeomBuffer *s_curBuf;
 static const LmrObjParams *s_curParams;
@@ -247,6 +266,7 @@ static lua_State *sLua;
 static int s_numTrisRendered;
 static std::string s_cacheDir;
 static bool s_recompileAllModels = true;
+static Graphics::Renderer *s_renderer;
 
 struct Vertex {
 	Vertex() : v(0.0), n(0.0), tex_u(0.0), tex_v(0.0) {}		// zero this shit to stop denormal-copying on resize
@@ -266,10 +286,11 @@ void LmrNotifyScreenWidth(float width)
 
 int LmrModelGetStatsTris() { return s_numTrisRendered; }
 void LmrModelClearStatsTris() { s_numTrisRendered = 0; }
-	
+
+//binds shader and sets lmr specific uniforms
 void UseProgram(LmrShader *shader, bool Textured = false, bool Glowmap = false) {
-	if (Render::AreShadersEnabled()) {
-		Render::State::UseProgram(shader);
+	if (Graphics::AreShadersEnabled()) {
+		shader->Use();
 		if (Textured) shader->set_tex(0);
 		shader->set_usetex(Textured ? 1 : 0);
 		if (Glowmap) shader->set_texGlow(1);
@@ -286,6 +307,16 @@ static void _fwrite_string(const std::string &str, FILE *f)
 	fwrite(str.c_str(), sizeof(char), len, f);
 }
 
+static size_t fread_or_die(void* ptr, size_t size, size_t nmemb, FILE* stream)
+{
+	size_t read_count = fread(ptr, size, nmemb, stream);
+	if (read_count < nmemb) {
+		fprintf(stderr, "Error: failed to read file (%s)\n", (feof(stream) ? "truncated" : "read error"));
+		abort();
+	}
+	return read_count;
+}
+
 static std::string _fread_string(FILE *f)
 {
 	int len = 0;
@@ -296,7 +327,7 @@ static std::string _fread_string(FILE *f)
 	delete[] buf;
 	return str;
 }
-	
+
 class LmrGeomBuffer {
 public:
 	LmrGeomBuffer(LmrModel *model, bool isStatic) {
@@ -348,7 +379,7 @@ public:
 		int activeLights = 0;
 		s_numTrisRendered += m_indices.size()/3;
 		
-		LmrShader *curShader = s_sunlightShader[Render::State::GetNumLights()-1];
+		LmrShader *curShader = s_sunlightShader[Graphics::State::GetNumLights()-1];
 
 		BindBuffers();
 
@@ -358,16 +389,20 @@ public:
 		for (unsigned int i=0; i<opEndIdx; i++) {
 			const Op &op = m_ops[i];
 			switch (op.type) {
-			case OP_DRAW_ELEMENTS:
-				if (op.elems.texture != 0 ) {
-					UseProgram(curShader, true, op.elems.glowmap != 0);
-					glActiveTexture(GL_TEXTURE0);
+			case OP_DRAW_ELEMENTS: {
+				if (op.elems.textureFile) {
 					glEnable(GL_TEXTURE_2D);
-					op.elems.texture->BindTexture();
-					if (op.elems.glowmap != 0) {
+					if (!op.elems.texture)
+						op.elems.texture = Graphics::TextureBuilder::Model(*op.elems.textureFile).GetOrCreateTexture(s_renderer, "model");
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(GL_TEXTURE_2D, static_cast<Graphics::TextureGL*>(op.elems.texture)->GetTextureNum());
+					if (op.elems.glowmapFile) {
+						if (!op.elems.glowmap)
+							op.elems.glowmap = Graphics::TextureBuilder::Model(*op.elems.glowmapFile).GetOrCreateTexture(s_renderer, "model");
 						glActiveTexture(GL_TEXTURE1);
-						op.elems.glowmap->BindTexture();
+						glBindTexture(GL_TEXTURE_2D, static_cast<Graphics::TextureGL*>(op.elems.glowmap)->GetTextureNum());
 					}
+					UseProgram(curShader, true, op.elems.glowmapFile);
 				} else {
 					UseProgram(curShader, false);
 				}
@@ -385,19 +420,36 @@ public:
 					// otherwise regular index vertex array
 					glDrawElements(GL_TRIANGLES, op.elems.count, GL_UNSIGNED_SHORT, &m_indices[op.elems.start]);
 				}
-				if ( op.elems.texture != 0 ) {
+				if (op.elems.texture) {
+					if (op.elems.glowmap) {
+						glActiveTexture(GL_TEXTURE1);
+						glBindTexture(GL_TEXTURE_2D, 0);
+					}
 					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(GL_TEXTURE_2D, 0);
 					glDisable(GL_TEXTURE_2D);
 				}
 				break;
-			case OP_DRAW_BILLBOARDS:
-				// XXX not using vbo yet
-				Render::UnbindAllBuffers();
-				op.billboards.texture->BindTexture();
-				Render::PutPointSprites(op.billboards.count, &m_vertices[op.billboards.start].v, op.billboards.size,
-						op.billboards.col, sizeof(Vertex));
+			}
+			case OP_DRAW_BILLBOARDS: {
+				Graphics::UnbindAllBuffers();
+				//XXX have to copy positions to a temporary array as
+				//renderer::drawpointsprites does not have a stride parameter
+				std::vector<vector3f> verts;
+				verts.reserve(op.billboards.count);
+				for (int j = 0; j < op.billboards.count; j++) {
+					verts.push_back(m_vertices[op.billboards.start + j].v);
+				}
+				if (!op.billboards.texture)
+					op.billboards.texture = Graphics::TextureBuilder::Model(*op.billboards.textureFile).GetOrCreateTexture(s_renderer, "billboard");
+				Graphics::Material mat;
+				mat.unlit = true;
+				mat.texture0 = op.billboards.texture;
+				mat.diffuse = Color(op.billboards.col[0], op.billboards.col[1], op.billboards.col[2], op.billboards.col[3]);
+				s_renderer->DrawPointSprites(op.billboards.count, &verts[0], &mat, op.billboards.size);
 				BindBuffers();
 				break;
+			}
 			case OP_SET_MATERIAL:
 				{
 					const LmrMaterial &m = m_model->m_materials[op.col.material_idx];
@@ -406,14 +458,14 @@ public:
 					glMaterialfv (GL_FRONT, GL_EMISSION, m.emissive);
 					glMaterialf (GL_FRONT, GL_SHININESS, m.shininess);
 					if (m.diffuse[3] >= 1.0) {
-						glDisable(GL_BLEND);
+						s_renderer->SetBlendMode(Graphics::BLEND_SOLID);
 					} else {
-						glEnable(GL_BLEND);
+						s_renderer->SetBlendMode(Graphics::BLEND_ALPHA);
 					}
 				}
 				break;
 			case OP_ZBIAS:
-				if (float_is_zero_general(op.zbias.amount)) {
+				if (is_zero_general(op.zbias.amount)) {
 					glDepthRange(0.0, 1.0);
 				} else {
 				//	vector3f tv = cameraPos - vector3f(op.zbias.pos);
@@ -455,10 +507,10 @@ public:
 					}
 					activeLights = 0;
 				} else {
-					int numLights = Render::State::GetNumLights();
+					int numLights = Graphics::State::GetNumLights();
 					for (int j=0; j<numLights; j++) glEnable(GL_LIGHT0 + j);
 					for (int j=4; j<8; j++) glDisable(GL_LIGHT0 + j);
-					curShader = s_sunlightShader[Render::State::GetNumLights()-1];
+					curShader = s_sunlightShader[Graphics::State::GetNumLights()-1];
 				}
 				break;
 			case OP_USE_LIGHT:
@@ -487,44 +539,40 @@ public:
 		glDisableClientState (GL_NORMAL_ARRAY);
 		glDisableClientState (GL_TEXTURE_COORD_ARRAY);
 
-		Render::UnbindAllBuffers();
+		Graphics::UnbindAllBuffers();
 
-		if (m_thrusters.size()) {
-			glDisable(GL_LIGHTING);
-			Render::State::UseProgram(Render::simpleShader);
-			RenderThrusters(rstate, cameraPos, params);
-		}
+		RenderThrusters(rstate, cameraPos, params);
 	}
 
 	void RenderThrusters(const RenderState *rstate, const vector3f &cameraPos, const LmrObjParams *params) {
-		// depth sort thrusters so alpha doesn't look fucked up!!!
-		ShipThruster::CameraDistance *dists = static_cast<ShipThruster::CameraDistance*>(alloca (m_thrusters.size() * sizeof(ShipThruster::CameraDistance)));
+		if (m_thrusters.empty()) return;
 
-		for (unsigned int i=0; i<m_thrusters.size(); i++) {
-			dists[i].thruster = &m_thrusters[i];
-			dists[i].dist = (m_thrusters[i].pos - cameraPos).Length();
-		}
-		sort(dists, dists + m_thrusters.size(), ShipThruster::CameraDistanceCompare());
-
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE);	
+		glDisable(GL_LIGHTING);
+		s_renderer->SetBlendMode(Graphics::BLEND_ADDITIVE);
+		s_renderer->SetDepthWrite(false);
 		glEnableClientState (GL_VERTEX_ARRAY);
+		glEnableClientState (GL_TEXTURE_COORD_ARRAY);
 		glDisableClientState (GL_NORMAL_ARRAY);
-		glDisableClientState (GL_TEXTURE_COORD_ARRAY);
-		glEnable (GL_BLEND);
+		glDisable(GL_CULL_FACE);
+		glEnable(GL_TEXTURE_2D);
 		for (unsigned int i=0; i<m_thrusters.size(); i++) {
-			ShipThruster::RenderThruster (rstate, params, dists[i].thruster);
+			m_thrusters[i].Render(s_renderer, rstate, params);
 		}
-		glDisable (GL_BLEND);
+		glDisable(GL_TEXTURE_2D);
+		glColor3f(1.f, 1.f, 1.f);
+		s_renderer->SetBlendMode(Graphics::BLEND_SOLID);
+		s_renderer->SetDepthWrite(true);
+		glEnable(GL_CULL_FACE);
 		glDisableClientState (GL_VERTEX_ARRAY);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);	
+		glDisableClientState (GL_TEXTURE_COORD_ARRAY);
 	}
 	void PushThruster(const vector3f &pos, const vector3f &dir, const float power, bool linear_only) {
 		unsigned int i = m_thrusters.size();
 		m_thrusters.resize(i+1);
-		m_thrusters[i].pos = pos;
-		m_thrusters[i].dir = dir;
-		m_thrusters[i].power = power;
-		m_thrusters[i].linear_only = linear_only;
+		m_thrusters[i].m_pos = pos;
+		m_thrusters[i].m_dir = dir;
+		m_thrusters[i].m_power = power;
+		m_thrusters[i].m_linear_only = linear_only;
 	}
 	int PushVertex(const vector3f &pos, const vector3f &normal) {
 		vector3f tex = curTexMatrix * pos;
@@ -551,7 +599,7 @@ public:
 	}
 	void SetTexture(const char *tex) {
 		if (tex) {
-			curTexture = TextureManager::GetTexture(tex);
+			curTexture = new std::string(tex);
 		} else {
 			curTexture = 0;
 			curGlowmap = 0; //won't have these without textures
@@ -559,7 +607,7 @@ public:
 	}
 	void SetGlowMap(const char *tex) {
 		if (tex) {
-			curGlowmap = TextureManager::GetTexture(tex);
+			curGlowmap = new std::string(tex);
 		} else {
 			curGlowmap = 0;
 		}
@@ -633,13 +681,14 @@ public:
 	void PushBillboards(const char *texname, const float size, const vector3f &color, const int numPoints, const vector3f *points)
 	{
 		char buf[256];
-		snprintf(buf, sizeof(buf), PIONEER_DATA_DIR"/textures/%s", texname);
+		snprintf(buf, sizeof(buf), "textures/%s", texname);
 
 		if (curOp.type) m_ops.push_back(curOp);
 		curOp.type = OP_DRAW_BILLBOARDS;
 		curOp.billboards.start = m_vertices.size();
 		curOp.billboards.count = numPoints;
-		curOp.billboards.texture = TextureManager::GetTexture(buf, true);
+		curOp.billboards.textureFile = new std::string(buf);
+		curOp.billboards.texture = 0;
 		curOp.billboards.size = size;
 		curOp.billboards.col[0] = color.x;
 		curOp.billboards.col[1] = color.y;
@@ -747,7 +796,7 @@ private:
 		if (m_isStatic) {
 			if (m_bo) m_bo->BindBuffersForDraw();
 		} else {
-			Render::UnbindAllBuffers();
+			Graphics::UnbindAllBuffers();
 			if (m_vertices.size()) {
 				glNormalPointer(GL_FLOAT, sizeof(Vertex), &m_vertices[0].n);
 				glVertexPointer(3, GL_FLOAT, sizeof(Vertex), &m_vertices[0].v);
@@ -757,15 +806,17 @@ private:
 	}
 
 	void OpDrawElements(int numIndices) {
-		if ((curOp.type != OP_DRAW_ELEMENTS) || (curOp.elems.texture != curTexture)) {
+		if ((curOp.type != OP_DRAW_ELEMENTS) || (curOp.elems.textureFile != curTexture)) {
 			if (curOp.type) m_ops.push_back(curOp);
 			curOp.type = OP_DRAW_ELEMENTS;
 			curOp.elems.start = m_indices.size();
 			curOp.elems.count = 0;
 			curOp.elems.elemMin = 1<<30;
 			curOp.elems.elemMax = 0;
-			curOp.elems.texture = curTexture;
-			curOp.elems.glowmap = curGlowmap;
+			curOp.elems.textureFile = curTexture;
+			curOp.elems.texture = 0;
+			curOp.elems.glowmapFile = curGlowmap;
+			curOp.elems.glowmap = 0;
 		}
 		curOp.elems.count += numIndices;
 	}
@@ -784,11 +835,11 @@ private:
 	struct Op {
 		enum OpType type;
 		union {
-			struct { Texture *texture; Texture *glowmap; int start, count, elemMin, elemMax; } elems;
+			struct { std::string *textureFile; std::string *glowmapFile; mutable Graphics::Texture *texture; mutable Graphics::Texture *glowmap; int start, count, elemMin, elemMax; } elems;
 			struct { int material_idx; } col;
 			struct { float amount; float pos[3]; float norm[3]; } zbias;
 			struct { LmrModel *model; float transform[16]; float scale; } callmodel;
-			struct { Texture *texture; int start, count; float size; float col[4]; } billboards;
+			struct { std::string *textureFile; mutable Graphics::Texture *texture; int start, count; float size; float col[4]; } billboards;
 			struct { bool local; } lighting_type;
 			struct { int num; float quadratic_attenuation; float pos[4], col[4]; } light;
 		};
@@ -796,8 +847,8 @@ private:
 	/* this crap is only used at build time... could move this elsewhere */
 	Op curOp;
 	Uint16 curTriFlag;
-	Texture *curTexture;
-	Texture *curGlowmap;
+	std::string *curTexture;
+	std::string *curGlowmap;
 	matrix4x4f curTexMatrix;
 	// 
 	std::vector<Vertex> m_vertices;
@@ -833,13 +884,13 @@ public:
 				if (m_ops[i].type == OP_CALL_MODEL) {
 					_fwrite_string(m_ops[i].callmodel.model->GetName(), f);
 				}
-				else if ((m_ops[i].type == OP_DRAW_ELEMENTS) && (m_ops[i].elems.texture)) {
-					_fwrite_string(m_ops[i].elems.texture->GetFilename(), f);
-					if (m_ops[i].elems.glowmap)
-						_fwrite_string(m_ops[i].elems.glowmap->GetFilename(), f);
+				else if ((m_ops[i].type == OP_DRAW_ELEMENTS) && (m_ops[i].elems.textureFile)) {
+					_fwrite_string(*m_ops[i].elems.textureFile, f);
+					if (m_ops[i].elems.glowmapFile)
+						_fwrite_string(*m_ops[i].elems.glowmapFile, f);
 				}
-				else if ((m_ops[i].type == OP_DRAW_BILLBOARDS) && (m_ops[i].billboards.texture)) {
-					_fwrite_string(m_ops[i].billboards.texture->GetFilename(), f);
+				else if ((m_ops[i].type == OP_DRAW_BILLBOARDS) && (m_ops[i].billboards.textureFile)) {
+					_fwrite_string(*m_ops[i].billboards.textureFile, f);
 				}
 			}
 		}
@@ -878,13 +929,18 @@ public:
 			if (m_ops[i].type == OP_CALL_MODEL) {
 				m_ops[i].callmodel.model = s_models[_fread_string(f)];
 			}
-			else if ((m_ops[i].type == OP_DRAW_ELEMENTS) && (m_ops[i].elems.texture)) {
-				m_ops[i].elems.texture = TextureManager::GetTexture(_fread_string(f));
-				if (m_ops[i].elems.glowmap)
-					m_ops[i].elems.glowmap = TextureManager::GetTexture(_fread_string(f));
+			else if ((m_ops[i].type == OP_DRAW_ELEMENTS) && (m_ops[i].elems.textureFile)) {
+				m_ops[i].elems.textureFile = new std::string(_fread_string(f));
+				m_ops[i].elems.texture = 0;
+
+				if (m_ops[i].elems.glowmapFile) {
+					m_ops[i].elems.glowmapFile = new std::string(_fread_string(f));
+					m_ops[i].elems.glowmap = 0;
+				}
 			}
-			else if ((m_ops[i].type == OP_DRAW_BILLBOARDS) && (m_ops[i].billboards.texture)) {
-				m_ops[i].billboards.texture = TextureManager::GetTexture(_fread_string(f));
+			else if ((m_ops[i].type == OP_DRAW_BILLBOARDS) && (m_ops[i].billboards.textureFile)) {
+				m_ops[i].billboards.textureFile = new std::string(_fread_string(f));
+				m_ops[i].elems.texture = 0;
 			}
 		}
 	}
@@ -974,7 +1030,7 @@ LmrModel::LmrModel(const char *model_name)
 		m_dynamicGeometry[i] = new LmrGeomBuffer(this, false);
 	}
 
-	const std::string cache_file = join_path(s_cacheDir.c_str(), model_name, 0) + ".bin";
+	const std::string cache_file = FileSystem::JoinPathBelow(s_cacheDir, model_name) + ".bin";
 
 	if (!s_recompileAllModels) {
 		// load cached model
@@ -1160,7 +1216,6 @@ void LmrModel::Render(const RenderState *rstate, const vector3f &cameraPos, cons
 	glScalef(m_scale, m_scale, m_scale);
 	glEnable(GL_NORMALIZE);
 	glEnable(GL_LIGHTING);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);	
 
 	float pixrad = 0.5f * s_scrWidth * rstate->combinedScale * m_drawClipRadius / cameraPos.Length();
 	//printf("%s: %fpx\n", m_name.c_str(), pixrad);
@@ -1181,8 +1236,13 @@ void LmrModel::Render(const RenderState *rstate, const vector3f &cameraPos, cons
 	}
 	s_curBuf = 0;
 
+	Graphics::UnbindAllBuffers();
+	//XXX hack. Unuse any shader. Can be removed when LMR uses Renderer.
+	if (Graphics::AreShadersEnabled())
+		s_sunlightShader[0]->Unuse();
+
 	glDisable(GL_NORMALIZE);
-	glDisable(GL_BLEND);
+	s_renderer->SetBlendMode(Graphics::BLEND_SOLID);
 	glPopMatrix();
 }
 
@@ -1514,7 +1574,7 @@ namespace ModelFuncs {
 			const float rad2 = jizz[i+3];
 			const vector3f _start = *start + (*end-*start)*jizz[i];
 			const vector3f _end = *start + (*end-*start)*jizz[i+2];
-			bool shitty_normal = float_equal_absolute(jizz[i], jizz[i+2], 1e-4f);
+			bool shitty_normal = is_equal_absolute(jizz[i], jizz[i+2], 1e-4f);
 
 			const int basevtx = vtxStart + steps*i;
 			float ang = 0;
@@ -2383,11 +2443,11 @@ namespace ModelFuncs {
 			s_curBuf->SetTexture(0);
 		} else {
 			lua_getglobal(L, "CurrentDirectory");
-			std::string dir = luaL_checkstring(L, -1);
+			std::string dir = luaL_optstring(L, -1, ".");
 			lua_pop(L, 1);
 
 			const char *texfile = luaL_checkstring(L, 1);
-			std::string t = dir + std::string("/") + texfile;
+			std::string t = FileSystem::JoinPathBelow(dir, texfile);
 			if (nargs == 4) {
 				// texfile, pos, uaxis, vaxis
 				vector3f pos = *MyLuaVec::checkVec(L, 2);
@@ -4040,49 +4100,35 @@ namespace ModelFuncs {
 } /* namespace ModelFuncs */
 
 namespace ObjLoader {
-	static void trim(char *input) {
-		char *output = input;
-		char *end = output;
-		char c;
-
-		while(*input && isspace(*input))
-			++input;
-
-		while(*input) {
-			c = *(output++) = *(input++);
-			if( !isspace(c) )
-				end = output;
-		}
-
-		*end = 0;
-	}
-
 	static std::map<std::string, std::string> load_mtl_file(lua_State *L, const char* mtl_file) {
 		std::map<std::string, std::string> mtl_map;
-		char buf[1024], name[1024] = "", file[1024];
+		char name[1024] = "", file[1024];
 
 		lua_getglobal(L, "CurrentDirectory");
-		std::string curdir = luaL_checkstring(L, -1);
+		std::string curdir = luaL_optstring(L, -1, ".");
 		lua_pop(L, 1);
 
-		snprintf(buf, sizeof(buf), "%s/%s", curdir.c_str(), mtl_file);
-		FILE *f = fopen(buf, "r");
-		if (!f) {
-			printf("Could not open %s\n", buf);
+		const std::string path = FileSystem::JoinPathBelow(curdir, mtl_file);
+		RefCountedPtr<FileSystem::FileData> mtlfiledata = FileSystem::gameDataFiles.ReadFile(path);
+		if (!mtlfiledata) {
+			printf("Could not open %s\n", path.c_str());
 			throw LmrUnknownMaterial();
 		}
 
-		for (int line_no=1; fgets(buf, sizeof(buf), f); line_no++) {
-			trim(buf);
-			if (!strncasecmp(buf, "newmtl ", 7)) {
-				PiVerify(1 == sscanf(buf, "newmtl %s", name));
+		std::string line;
+		StringRange mtlfilerange = mtlfiledata->AsStringRange();
+		for (int line_no=1; !mtlfilerange.Empty(); line_no++) {
+			line = mtlfilerange.ReadLine().StripSpace().ToString();
+
+			if (!strncasecmp(line.c_str(), "newmtl ", 7)) {
+				PiVerify(1 == sscanf(line.c_str(), "newmtl %s", name));
 			}
-			if (!strncasecmp(buf, "map_K", 5) && strlen(name) > 0) {
-				PiVerify(1 == sscanf(buf, "map_Kd %s", file));
+			if (!strncasecmp(line.c_str(), "map_K", 5) && strlen(name) > 0) {
+				PiVerify(1 == sscanf(line.c_str(), "map_Kd %s", file));
 				mtl_map[name] = file;
 			}
 		}
-		fclose(f);
+
 		return mtl_map;
 	}
 
@@ -4134,15 +4180,17 @@ namespace ObjLoader {
 		}
 
 		lua_getglobal(L, "CurrentDirectory");
-		std::string curdir = luaL_checkstring(L, -1);
+		const std::string curdir = luaL_optstring(L, -1, ".");
 		lua_pop(L, 1);
-	
-		char buf[1024];
-		snprintf(buf, sizeof(buf), "%s/%s", curdir.c_str(), obj_name);
-		FILE *f = fopen(buf, "r");
-		if (!f) {
-			Error("Could not open %s\n", buf);
+
+		const std::string path = FileSystem::JoinPathBelow(curdir, obj_name);
+		RefCountedPtr<FileSystem::FileData> objdata = FileSystem::gameDataFiles.ReadFile(path);
+		if (!objdata) {
+			Error("Could not open '%s'\n", path.c_str());
 		}
+
+		StringRange objdatabuf = objdata->AsStringRange();
+
 		std::vector<vector3f> vertices;
 		std::vector<vector3f> texcoords;
 		std::vector<vector3f> normals;
@@ -4152,7 +4200,11 @@ namespace ObjLoader {
 		// maps obj file vtx_idx,norm_idx to a single GeomBuffer vertex index
 		std::map<objTriplet, int> vtxmap;
 
-		for (int line_no=1; fgets(buf, sizeof(buf), f); line_no++) {
+		std::string line;
+		for (int line_no=1; !objdatabuf.Empty(); line_no++) {
+			line = objdatabuf.ReadLine().ToString();
+			const char *buf = line.c_str();
+
 			if ((buf[0] == 'v') && buf[1] == ' ') {
 				// vertex
 				vector3f v;
@@ -4178,8 +4230,8 @@ namespace ObjLoader {
 			else if ((buf[0] == 'f') && (buf[1] == ' ')) {
 				// how many vertices in this face?
 				const int MAX_VTX_FACE = 64;
-				char *bit[MAX_VTX_FACE];
-				char *pos = &buf[2];
+				const char *bit[MAX_VTX_FACE];
+				const char *pos = &buf[2];
 				int numBits = 0;
 				while ((pos[0] != '\0') && (numBits < MAX_VTX_FACE)) {
 					bit[numBits++] = pos;
@@ -4282,7 +4334,6 @@ namespace ObjLoader {
 				}
 			}
 		}
-		fclose(f);
 		return 0;
 	}
 }
@@ -4348,41 +4399,36 @@ static int define_model(lua_State *L)
 	return 0;
 }
 
-static Uint32 s_allModelFilesCRC = 0;
-static void _makeModelFilesCRC(const std::string &dir, const std::string &filename)
-{
-	struct stat info;
-	if (stat(filename.c_str(), &info)) return;
+static Uint32 s_allModelFilesCRC;
 
-	if (S_ISDIR(info.st_mode)) {
-		foreach_file_in(filename, &_makeModelFilesCRC);
-	} else if (S_ISREG(info.st_mode) && (filename.substr(filename.size()-4) != ".png")) {
-		FILE *f = fopen(filename.c_str(), "rb");
-		if (f) {
-			fseek(f, 0, SEEK_END);
-			int size = ftell(f);
-			unsigned char *data = reinterpret_cast<unsigned char *>(malloc(size));
-			fseek(f, 0, SEEK_SET);
-			fread(data, 1, size, f);
-			for (int c=0; c<size; c++) s_allModelFilesCRC += data[c];
-			free(data);
-			fclose(f);
+static Uint32 _calculate_all_models_checksum()
+{
+	// do we need to rebuild the model cache?
+	Uint32 checksum = 0;
+	for (FileSystem::FileEnumerator files(FileSystem::gameDataFiles, "models", FileSystem::FileEnumerator::Recurse); !files.Finished(); files.Next())
+	{
+		const FileSystem::FileInfo &info = files.Current();
+		if (info.IsFile() && (info.GetPath().substr(info.GetPath().size() - 4) != ".png")) {
+			RefCountedPtr<FileSystem::FileData> data = files.Current().Read();
+			const char *buf = data->GetData();
+			size_t sz = data->GetSize();
+			for (size_t i = 0; i < sz; ++i) { checksum += buf[i]; }
 		}
 	}
+	return checksum;
 }
 
 static void _detect_model_changes()
 {
-	// do we need to rebuild the model cache?
-	foreach_file_in(PIONEER_DATA_DIR "/models", &_makeModelFilesCRC);
+	s_allModelFilesCRC = _calculate_all_models_checksum();
 
-	FILE *cache_sum_file = fopen(join_path(s_cacheDir.c_str(), "cache.sum", 0).c_str(), "rb");
+	FILE *cache_sum_file = fopen(FileSystem::JoinPath(s_cacheDir, "cache.sum").c_str(), "rb");
 	if (cache_sum_file) {
 		if ((_fread_string(cache_sum_file) == PIONEER_VERSION) &&
 		    (_fread_string(cache_sum_file) == PIONEER_EXTRAVERSION)) {
-			Uint32 crc;
-			fread_or_die(&crc, sizeof(crc), 1, cache_sum_file);
-			if (crc == s_allModelFilesCRC) {
+			Uint32 checksum;
+			fread_or_die(&checksum, sizeof(checksum), 1, cache_sum_file);
+			if (checksum == s_allModelFilesCRC) {
 				s_recompileAllModels = false;
 			}
 		}
@@ -4394,7 +4440,7 @@ static void _detect_model_changes()
 static void _write_model_crc_file()
 {
 	if (s_recompileAllModels) {
-		FILE *cache_sum_file = fopen(join_path(s_cacheDir.c_str(), "cache.sum", 0).c_str(), "wb");
+		FILE *cache_sum_file = fopen(FileSystem::JoinPath(s_cacheDir, "cache.sum").c_str(), "wb");
 		if (cache_sum_file) {
 			_fwrite_string(PIONEER_VERSION, cache_sum_file);
 			_fwrite_string(PIONEER_EXTRAVERSION, cache_sum_file);
@@ -4404,9 +4450,14 @@ static void _write_model_crc_file()
 	}
 }
 
-void LmrModelCompilerInit()
+void LmrModelCompilerInit(Graphics::Renderer *renderer)
 {
-	s_cacheDir = GetPiUserDir("model_cache");
+	s_renderer = renderer;
+
+	ShipThruster::Init(renderer);
+
+	s_cacheDir = FileSystem::GetUserDir("model_cache");
+	FileSystem::rawFileSystem.MakeDirectory(s_cacheDir);
 	_detect_model_changes();
 
 	s_staticBufferPool = new BufferObjectPool<sizeof(Vertex)>();
@@ -4419,7 +4470,7 @@ void LmrModelCompilerInit()
 	s_pointlightShader[2] = new LmrShader("model-pointlit", "#define NUM_LIGHTS 3\n");
 	s_pointlightShader[3] = new LmrShader("model-pointlit", "#define NUM_LIGHTS 4\n");
 
-	PiVerify(s_font = s_fontManager.GetVectorFont("WorldFont"));
+	PiVerify(s_font = s_fontCache.GetVectorFont("WorldFont"));
 
 	lua_State *L = lua_open();
 	sLua = L;
@@ -4493,20 +4544,11 @@ void LmrModelCompilerInit()
 	lua_register(L, "use_light", ModelFuncs::use_light);
 
 	s_buildDynamic = false;
-	lua_pushstring(L, PIONEER_DATA_DIR);
-	lua_setglobal(L, "CurrentDirectory");
-	
-	// same as luaL_dofile, except we can pass an error handler
-	lua_pushcfunction(L, pi_lua_panic);
-	if (luaL_loadfile(L, (std::string(PIONEER_DATA_DIR) + "/pimodels.lua").c_str())) {
-		pi_lua_panic(L);
-	} else {
-		lua_pcall(L, 0, LUA_MULTRET, -2);
-	}
-	lua_pop(sLua, 1);  // remove panic func
+
+	pi_lua_dofile(L, "pimodels.lua");
 
 	LUA_DEBUG_END(sLua, 0);
-	
+
 	_write_model_crc_file();
 	s_buildDynamic = true;
 }
@@ -4518,7 +4560,7 @@ void LmrModelCompilerUninit()
 		delete s_sunlightShader[i];
 		delete s_pointlightShader[i];
 	}
-	// FontManager should be ok...
+	// FontCache should be ok...
 
 	std::map<std::string, LmrModel*>::iterator it_model;
 	for (it_model=s_models.begin(); it_model != s_models.end(); ++it_model)	{
@@ -4528,4 +4570,6 @@ void LmrModelCompilerUninit()
 	lua_close(sLua); sLua = 0;
 
 	delete s_staticBufferPool;
+
+	ShipThruster::Uninit();
 }

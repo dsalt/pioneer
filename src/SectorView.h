@@ -9,6 +9,7 @@
 #include "View.h"
 #include "Sector.h"
 #include "SystemPath.h"
+#include "graphics/Drawables.h"
 
 class SectorView: public View {
 public:
@@ -45,7 +46,7 @@ private:
 		Gui::Label *shortDesc;
 	};
 	
-	void DrawSector(int x, int y, int z);
+	void DrawSector(int x, int y, int z, const vector3f &playerAbsPos, const matrix4x4f &trans);
 	void PutClickableLabel(const std::string &text, const Color &labelCol, const SystemPath &path);
 
 	void SetSelectedSystem(const SystemPath &path);
@@ -89,7 +90,7 @@ private:
 	Gui::ImageButton *m_zoomOutButton;
 	Gui::ImageButton *m_galaxyButton;
 	Gui::TextEntry *m_searchBox;
-	GLuint m_gluDiskDlist;
+	Graphics::VertexArray *m_disk;
 	
 	Gui::LabelSet *m_clickableLabels;
 
@@ -108,6 +109,7 @@ private:
 	std::map<SystemPath,Sector*> m_sectorCache;
 
 	float m_playerHyperspaceRange;
+	Graphics::Drawables::Line3D m_jumpLine;
 };
 
 #endif /* _SECTORVIEW_H */

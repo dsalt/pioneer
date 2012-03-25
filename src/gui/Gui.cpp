@@ -1,6 +1,6 @@
 #include "libs.h"
 #include "Gui.h"
-#include "render/Render.h"
+#include "graphics/Graphics.h"
 
 namespace Gui {
 
@@ -86,10 +86,10 @@ void Draw()
 	Screen::Draw();
 }
 
-void Init(int screen_width, int screen_height, int ui_width, int ui_height)
+void Init(Graphics::Renderer *renderer, int screen_width, int screen_height, int ui_width, int ui_height)
 {
 	SDL_EnableUNICODE(1);
-	Screen::Init(screen_width, screen_height, ui_width, ui_height);
+	Screen::Init(renderer, screen_width, screen_height, ui_width, ui_height);
 }
 
 void Uninit()
@@ -102,7 +102,6 @@ void Uninit()
 
 void MainLoopIteration()
 {
-	Render::PrepareFrame();
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glMatrixMode(GL_MODELVIEW);
@@ -121,9 +120,8 @@ void MainLoopIteration()
 
 	SDL_ShowCursor(1);
 	SDL_WM_GrabInput(SDL_GRAB_OFF);
-	Render::PostProcess();
 	Gui::Draw();
-	Render::SwapBuffers();
+	Graphics::SwapBuffers();
 }
 
 namespace Theme {

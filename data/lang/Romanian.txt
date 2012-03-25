@@ -215,8 +215,6 @@ OTHER_GRAPHICS_SETTINGS
     Alte setări grafice
 USE_SHADERS
     Folosire shaderi
-USE_HDR
-    Folosire lumini HDR (arată super)
 SOUND_SETTINGS
     Setări sunet
 VOL_MASTER
@@ -917,10 +915,6 @@ VAST_STRIP_MINE
     Vast strip-mining colony.
 HIGH_POPULATION_OUTDOOR_WORLD
     High population outdoor world.
-SOMEWHERE_SPACEPORT
-    %spaceport Spaceport
-SOMEWHERE_STARPORT
-    %starport Starport
 MASS
     Masă
 N_WHATEVER_MASSES

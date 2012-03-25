@@ -5,7 +5,7 @@ dnl Setup
 dnl ###########################################################################
 AC_PREREQ(2.59)
 
-AC_INIT([pioneer], [alpha-19-dev], [pioneer@pioneerspacesim.net])
+AC_INIT([pioneer], [alpha-21-dev], [pioneer@pioneerspacesim.net])
 dnl AC_CONFIG_HEADERS([config.h])
 
 AM_INIT_AUTOMAKE([1.9 foreign dist-bzip2 dist-xz dist-zip])
@@ -70,14 +70,14 @@ dnl Always add -Wall, where supported
 PIONEER_WARN_C_CXX_FLAG([-Wall])
 
 dnl Add -O0 if requested
-OPTIMISE=
+OPTIMISE=-O3
 AC_ARG_WITH([no-optimise], AS_HELP_STRING([--with-no-optimise], [Compile without optimisation]), [test "$withval" != no && OPTIMISE=-O0], [])
 AC_SUBST([OPTIMISE])
 
 dnl Debug stuff
 AC_ARG_ENABLE([debug], AS_HELP_STRING([--enable-debug], [Enable debugging code (stack checks, debug tools features, etc)]), [EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -DDEBUG"])
 AC_ARG_WITH([fno-inline],  AS_HELP_STRING([--with-fno-inline], [Compile without inlining. Helps debugging segaults that occur in STL code]), [PIONEER_C_CXX_FLAG([-fno-inline])])
-AC_ARG_WITH([gprof],       AS_HELP_STRING([--with-gprof], [Compile with gprof profiler]), [PIONEER_C_CXX_FLAG([-p])])
+AC_ARG_WITH([gprof],       AS_HELP_STRING([--with-gprof], [Compile with gprof profiler]), [PIONEER_C_CXX_FLAG([-pg])])
 
 dnl Dist versioning
 AC_ARG_WITH([extra-version], AS_HELP_STRING([--with-extra-version], [Add text to game version shown on splash screen]), [EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -DPIONEER_EXTRAVERSION=\\\"$withval\\\""])
@@ -130,16 +130,6 @@ dnl ###########################################################################
 dnl Library checks
 dnl ###########################################################################
 
-AC_DEFUN([PIONEER_CHECK_CONFIG],
-    [PKG_CHECK_MODULES([$1], [$2], [], [
-	AC_PATH_PROG([$3], [$4], [AC_MSG_ERROR([$4 is required])])
-	][$1][_CFLAGS="`$][$3][ --cflags`"
-	][$1][_LIBS="`$][$3][ --libs`"
-	AC_SUBST([$1][_CFLAGS])
-	AC_SUBST([$1][_LIBS])
-	])
-    ])
-
 dnl FIXME: should really check for headers (if no pkgconfig)
 AC_DEFUN([PIONEER_CHECK_LIB],
     [PKG_CHECK_MODULES([$1], [$2], [],
@@ -175,14 +165,12 @@ case "$host" in
 esac
 
 dnl Check for SDL
-PIONEER_CHECK_CONFIG([SDL], [sdl], [SDLCONFIG], [sdl-config])
-AC_CHECK_LIB([SDL_image], [IMG_Load])
-SDL_LIBS="$SDL_LIBS -lSDL_image"
+PKG_CHECK_MODULES([SDL], [sdl SDL_image])
 
 dnl Check for Freetype
-PIONEER_CHECK_CONFIG([FREETYPE], [freetype2], [FTCONFIG], [freetype-config])
+PKG_CHECK_MODULES([FREETYPE], [freetype2])
 
-dnl Not using vorbis yet
+dnl Check for libvorbis
 PKG_CHECK_MODULES([VORBIS], [vorbisfile])
 
 dnl Optionally use external liblua
@@ -200,6 +188,25 @@ esac
 
 dnl Check for libpng
 PKG_CHECK_MODULES([PNG], [libpng])
+
+dnl ###########################################################################
+dnl Platform selection
+dnl ###########################################################################
+
+AC_MSG_CHECKING([platform type])
+case "$host" in
+  i686-pc-mingw32|x86_64-pc-mingw64)
+	PLATFORM=win32
+	;;
+  *)
+	PLATFORM=posix
+	;;
+esac
+AC_SUBST([PLATFORM])
+AC_MSG_RESULT($PLATFORM)
+
+AM_CONDITIONAL([BUILD_WIN32], [test "x-$PLATFORM" = "x-win32"])
+AM_CONDITIONAL([BUILD_POSIX], [test "x-$PLATFORM" = "x-posix"])
 
 dnl ###########################################################################
 dnl System-specific stuff not covered above
@@ -235,5 +242,5 @@ AC_SUBST([WARN_CFLAGS])
 AC_SUBST([WARN_CXXFLAGS])
 AC_SUBST([WARN_CPPFLAGS])
 
-AC_CONFIG_FILES([Makefile data/Makefile src/Makefile src/collider/Makefile src/gui/Makefile src/render/Makefile src/terrain/Makefile contrib/Makefile contrib/lua/Makefile contrib/oolua/Makefile osx/Makefile win32/Makefile])
+AC_CONFIG_FILES([Makefile data/Makefile src/Makefile src/collider/Makefile src/gui/Makefile src/graphics/Makefile src/terrain/Makefile contrib/Makefile contrib/lua/Makefile contrib/oolua/Makefile osx/Makefile win32/Makefile win32/src/Makefile])
 AC_OUTPUT

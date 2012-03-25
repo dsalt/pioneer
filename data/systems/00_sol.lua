@@ -50,7 +50,7 @@ local earth = CustomSBody:new('Earth', 'PLANET_TERRESTRIAL')
 	:eccentricity(f(167,10000))
 	:rotation_period(f(1,1))
 	:axial_tilt(math.fixed.deg2rad(f(2344,100)))
-	:height_map('earth.hmap')
+	:height_map('earth.hmap',0)
 	:metallicity(f(1,2))
 	:volcanicity(f(1,10))
 	:atmos_density(f(1,1))
@@ -85,20 +85,21 @@ local earth_starports = {
 
 local moon = {
 	CustomSBody:new('Moon', 'PLANET_TERRESTRIAL')
-		:seed(1900)
+		:seed(-5)
 		:radius(f(273,1000))
 		:mass(f(12,1000))
 		:temp(220)
 		:semi_major_axis(f(257,100000))
 		:eccentricity(f(549,10000))
+		:height_map('moon.hmap',1)
 		:inclination(math.deg2rad(5.145))
 		:rotation_period(f(273,10))
 		:axial_tilt(math.fixed.deg2rad(f(668,100)))
 		:volcanicity(f(0,1)),
 	{
-		CustomSBody:new('Lunar City', 'STARPORT_SURFACE')
-			:latitude(math.deg2rad(19))
-			:longitude(math.deg2rad(99)),
+		CustomSBody:new('Tranquility Base', 'STARPORT_SURFACE')
+			:latitude(math.deg2rad(0.6875))
+			:longitude(math.deg2rad(23.4334))
 	},
 }
 
@@ -165,7 +166,7 @@ local mars_moons = {
 }
 
 local jupiter = CustomSBody:new('Jupiter', 'PLANET_GAS_GIANT')
-	:seed(21)
+	:seed(31)
 	:radius(f(11,1))
 	:mass(f(3178,10))
 	:temp(165)
@@ -262,6 +263,23 @@ local saturn = CustomSBody:new('Saturn', 'PLANET_GAS_GIANT')
 	:axial_tilt(math.fixed.deg2rad(f(2673,100)))
 
 local saturn_moons = {
+	CustomSBody:new('Dione', 'PLANET_TERRESTRIAL')
+		:radius(f(881,10000))
+		:mass(f(328,1000000))
+		:temp(87)
+		:semi_major_axis(f(252,100000))
+		:eccentricity(f(22,10000))
+		:inclination(math.deg2rad(0.019))
+		:rotation_period(f(2737,1000)),
+	CustomSBody:new('Rhea', 'PLANET_TERRESTRIAL')
+		:radius(f(12,100))
+		:mass(f(39,10000))
+		:temp(81)
+		:semi_major_axis(f(441,100000))
+		:eccentricity(f(126,100000))
+		:inclination(math.deg2rad(0.345))
+		:rotation_period(f(452,100))
+		:atmos_density(f(1,10)),
 	CustomSBody:new('Titan', 'PLANET_TERRESTRIAL')
 		:seed(7)
 		:radius(f(400,1000))
@@ -285,15 +303,6 @@ local saturn_moons = {
 			:eccentricity(f(50,1000))
 			:rotation_period(f(11,9)),
 	},
-	CustomSBody:new('Rhea', 'PLANET_TERRESTRIAL')
-		:radius(f(12,100))
-		:mass(f(39,10000))
-		:temp(81)
-		:semi_major_axis(f(441,100000))
-		:eccentricity(f(126,100000))
-		:inclination(math.deg2rad(0.345))
-		:rotation_period(f(452,100))
-		:atmos_density(f(1,10)),
 	CustomSBody:new('Iapetus', 'PLANET_TERRESTRIAL')
 		:radius(f(1155,10000))
 		:mass(f(3,10000))
@@ -302,14 +311,6 @@ local saturn_moons = {
 		:eccentricity(f(29,1000))
 		:inclination(math.deg2rad(15.47))
 		:rotation_period(f(7932,100)),
-	CustomSBody:new('Dione', 'PLANET_TERRESTRIAL')
-		:radius(f(881,10000))
-		:mass(f(328,1000000))
-		:temp(87)
-		:semi_major_axis(f(252,100000))
-		:eccentricity(f(22,10000))
-		:inclination(math.deg2rad(0.019))
-		:rotation_period(f(2737,1000)),
 }
 
 local uranus = CustomSBody:new('Uranus', 'PLANET_GAS_GIANT')
@@ -324,6 +325,22 @@ local uranus = CustomSBody:new('Uranus', 'PLANET_GAS_GIANT')
 	:axial_tilt(math.fixed.deg2rad(f(9777,100)))
 
 local uranus_moons = {
+	CustomSBody:new('Ariel', 'PLANET_TERRESTRIAL')
+		:radius(f(908,10000))
+		:mass(f(226,1000000))
+		:temp(60)
+		:semi_major_axis(f(1277,1000000))
+		:eccentricity(f(12,10000))
+		:inclination(math.deg2rad(0.26))
+		:rotation_period(f(252,100)),
+	CustomSBody:new('Umbriel', 'PLANET_TERRESTRIAL')
+		:radius(f(92,1000))
+		:mass(f(2,10000))
+		:temp(75)
+		:semi_major_axis(f(178,100000))
+		:eccentricity(f(39,10000))
+		:inclination(math.deg2rad(0.128))
+		:rotation_period(f(4144,1000)),
 	CustomSBody:new('Titania', 'PLANET_TERRESTRIAL')
 		:radius(f(1235,10000))
 		:mass(f(5908,10000000))
@@ -341,26 +358,10 @@ local uranus_moons = {
 		:eccentricity(f(14,10000))
 		:inclination(math.deg2rad(0.058))
 		:rotation_period(f(135,10)),
-	CustomSBody:new('Umbriel', 'PLANET_TERRESTRIAL')
-		:radius(f(92,1000))
-		:mass(f(2,10000))
-		:temp(75)
-		:semi_major_axis(f(178,100000))
-		:eccentricity(f(39,10000))
-		:inclination(math.deg2rad(0.128))
-		:rotation_period(f(4144,1000)),
-	CustomSBody:new('Ariel', 'PLANET_TERRESTRIAL')
-		:radius(f(908,10000))
-		:mass(f(226,1000000))
-		:temp(60)
-		:semi_major_axis(f(1277,1000000))
-		:eccentricity(f(12,10000))
-		:inclination(math.deg2rad(0.26))
-		:rotation_period(f(252,100)),
 }
 
 local neptune = CustomSBody:new('Neptune', 'PLANET_GAS_GIANT')
-	:seed(24) --22, 17
+	:seed(43)
 	:radius(f(38,10))
 	:mass(f(17147,1000))
 	:temp(72)
@@ -371,6 +372,14 @@ local neptune = CustomSBody:new('Neptune', 'PLANET_GAS_GIANT')
 	:axial_tilt(math.fixed.deg2rad(f(2832,100)))
 
 local neptune_moons = {
+	CustomSBody:new('Proteus', 'PLANET_ASTEROID')
+		:radius(f(310,10000))
+		:mass(f(710,1000))
+		:temp(51)
+		:semi_major_axis(f(786,1000000))
+		:eccentricity(f(53,100000))
+		:inclination(math.deg2rad(0.524))
+		:rotation_period(f(1122,1000)),
 	CustomSBody:new('Triton', 'PLANET_TERRESTRIAL')
 		:radius(f(2122,10000))
 		:mass(f(359,100000))
@@ -395,14 +404,6 @@ local neptune_moons = {
 		:eccentricity(f(75,100))
 		:inclination(math.deg2rad(32.55))
 		:rotation_period(f(115,240)),
-	CustomSBody:new('Proteus', 'PLANET_ASTEROID')
-		:radius(f(310,10000))
-		:mass(f(710,1000))
-		:temp(51)
-		:semi_major_axis(f(786,1000000))
-		:eccentricity(f(53,100000))
-		:inclination(math.deg2rad(0.524))
-		:rotation_period(f(1122,1000)),
 }
 
 local pluto = CustomSBody:new('Pluto', 'PLANET_TERRESTRIAL')

@@ -181,8 +181,10 @@ const struct EnumItem ENUM_ShipJumpStatus[] = {
 	{ "OK", Ship::HYPERJUMP_OK },
 	{ "CURRENT_SYSTEM", Ship::HYPERJUMP_CURRENT_SYSTEM },
 	{ "NO_DRIVE", Ship::HYPERJUMP_NO_DRIVE },
+	{ "DRIVE_ACTIVE", Ship::HYPERJUMP_DRIVE_ACTIVE },
 	{ "OUT_OF_RANGE", Ship::HYPERJUMP_OUT_OF_RANGE },
 	{ "INSUFFICIENT_FUEL", Ship::HYPERJUMP_INSUFFICIENT_FUEL },
+	{ "SAFETY_LOCKOUT", Ship::HYPERJUMP_SAFETY_LOCKOUT },
 	{ 0, 0 },
 };
 
@@ -198,6 +200,13 @@ const struct EnumItem ENUM_ShipAIError[] = {
 	{ "GRAV_TOO_HIGH", Ship::AIERROR_GRAV_TOO_HIGH },
 	{ "REFUSED_PERM", Ship::AIERROR_REFUSED_PERM },
 	{ "ORBIT_IMPOSSIBLE", Ship::AIERROR_ORBIT_IMPOSSIBLE },
+	{ 0, 0 },
+};
+
+const struct EnumItem ENUM_ShipFuelStatus[] = {
+	{ "OK", Ship::FUEL_OK },
+	{ "WARNING", Ship::FUEL_WARNING },
+	{ "EMPTY", Ship::FUEL_EMPTY },
 	{ 0, 0 },
 };
 

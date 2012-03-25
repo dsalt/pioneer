@@ -218,8 +218,6 @@ OTHER_GRAPHICS_SETTINGS
     Autres options graphiques
 USE_SHADERS
     Utiliser les shaders
-USE_HDR
-    Utiliser HDR (plutôt joli!)
 SOUND_SETTINGS
     Réglages Son
 VOL_MASTER
@@ -940,10 +938,6 @@ VAST_STRIP_MINE
     Vast strip-mining colony.
 HIGH_POPULATION_OUTDOOR_WORLD
     Monde habitable hautement peuplé.
-SOMEWHERE_SPACEPORT
-    %spaceport Spatioport
-SOMEWHERE_STARPORT
-    %starport Station
 MASS
     Masse
 N_WHATEVER_MASSES

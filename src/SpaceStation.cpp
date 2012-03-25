@@ -198,7 +198,7 @@ void SpaceStation::Init()
 			else surfaceStationTypes.push_back(t);
 		}
 	}
-	//printf("%lu orbital station types and %lu surface station types.\n", orbitalStationTypes.size(), surfaceStationTypes.size());
+	//printf(SIZET_FMT " orbital station types and " SIZET_FMT " surface station types.\n", orbitalStationTypes.size(), surfaceStationTypes.size());
 }
 
 void SpaceStation::Uninit()
@@ -243,6 +243,7 @@ void SpaceStation::Save(Serializer::Writer &wr, Space *space)
 		wr.Float(float(m_openAnimState[i]));
 		wr.Float(float(m_dockAnimState[i]));
 	}
+	wr.Bool(m_bbCreated);
 	wr.Double(m_lastUpdatedShipyard);
 	wr.Int32(space->GetIndexForSBody(m_sbody));
 	wr.Int32(m_numPoliceDocked);
@@ -277,6 +278,7 @@ void SpaceStation::Load(Serializer::Reader &rd, Space *space)
 		m_openAnimState[i] = rd.Float();
 		m_dockAnimState[i] = rd.Float();
 	}
+	m_bbCreated = rd.Bool();
 	m_lastUpdatedShipyard = rd.Double();
 	m_sbody = space->GetSBodyByIndex(rd.Int32());
 	m_numPoliceDocked = rd.Int32();
@@ -300,6 +302,7 @@ SpaceStation::SpaceStation(const SBody *sbody): ModelBody()
 	m_sbody = sbody;
 	m_lastUpdatedShipyard = 0;
 	m_numPoliceDocked = Pi::rng.Int32(3,10);
+	m_bbCreated = false;
 
 	for (int i=0; i<MAX_DOCKING_PORTS; i++) {
 		m_shipDocking[i].ship = 0;
@@ -329,7 +332,6 @@ void SpaceStation::InitStation()
 	// XXX the animation namespace must match that in LuaConstants
 	GetLmrObjParams().animationNamespace = "SpaceStationAnimation";
 	SetModel(m_type->modelName, true);
-	m_bbCreated = false;
 }
 
 SpaceStation::~SpaceStation()
@@ -500,15 +502,26 @@ void SpaceStation::DoLawAndOrder()
 
 void SpaceStation::TimeStepUpdate(const float timeStep)
 {
-	if (Pi::game->GetTime() > m_lastUpdatedShipyard) {
-        if (m_bbCreated)
-			Pi::luaOnUpdateBB->Queue(this);
-		else if (GetFreeDockingPort() != 0)	// only create a BB if there's ships here
-			CreateBB();
+	bool update = false;
+
+	// if there's no BB and there are ships here, make one
+	if (!m_bbCreated && GetFreeDockingPort() != 0) {
+		CreateBB();
+		update = true;
+	}
+	
+	// if there is and it hasn't had an update for a while, update it
+	else if (Pi::game->GetTime() > m_lastUpdatedShipyard) {
+		Pi::luaOnUpdateBB->Queue(this);
+		update = true;
+	}
+
+	if (update) {
 		UpdateShipyard();
 		// update again in an hour or two
 		m_lastUpdatedShipyard = Pi::game->GetTime() + 3600.0 + 3600.0*Pi::rng.Double();
 	}
+
 	DoDockingAnimation(timeStep);
 	DoLawAndOrder();
 }
@@ -761,7 +774,7 @@ void SpaceStation::NotifyRemoved(const Body* const removedBody)
 	}
 }
 
-void SpaceStation::Render(const vector3d &viewCoords, const matrix4x4d &viewTransform)
+void SpaceStation::Render(Graphics::Renderer *r, const vector3d &viewCoords, const matrix4x4d &viewTransform)
 {
 	LmrObjParams &params = GetLmrObjParams();
 	params.label = GetLabel().c_str();
@@ -789,7 +802,7 @@ void SpaceStation::Render(const vector3d &viewCoords, const matrix4x4d &viewTran
 			if (!m_adjacentCity) {
 				m_adjacentCity = new CityOnPlanet(planet, this, m_sbody->seed);
 			}
-			m_adjacentCity->Render(this, viewCoords, viewTransform);
+			m_adjacentCity->Render(r, this, viewCoords, viewTransform);
 		}
 	}
 }

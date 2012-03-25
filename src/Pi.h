@@ -1,7 +1,7 @@
 #ifndef _PI_H
 #define _PI_H
 
-#include "libs.h"
+#include "utils.h"
 #include "gui/Gui.h"
 #include "View.h"
 #include "mtrand.h"
@@ -30,9 +30,11 @@ class GalacticView;
 class Ship;
 class GameMenuView;
 class LuaConsole;
+class LuaNameGen;
+namespace Graphics { class Renderer; }
 namespace Sound { class MusicPlayer; }
 
-#if OBJECTVIEWER
+#if WITH_OBJECTVIEWER
 class ObjectViewerView;
 #endif
 
@@ -55,6 +57,7 @@ class Pi {
 public:
 	static void Init();
 	static void RedirectStdio();
+	static void LoadWindowIcon();
 	static void InitGame();
 	static void StarportStart(Uint32 starport);
 	static void StartGame();
@@ -89,6 +92,7 @@ public:
 	static void BoinkNoise();
 	static float CalcHyperspaceRange(int hyperclass, int total_mass_in_tonnes);
 	static void Message(const std::string &message, const std::string &from = "", enum MsgLevel level = MSG_NORMAL);
+	static std::string GetSaveDir();
 
 	static sigc::signal<void, SDL_keysym*> onKeyPress;
 	static sigc::signal<void, SDL_keysym*> onKeyRelease;
@@ -125,6 +129,9 @@ public:
 	static LuaEventQueue<> *luaOnSongFinished;
 	static LuaEventQueue<Ship> *luaOnShipFlavourChanged;
 	static LuaEventQueue<Ship,const char *> *luaOnShipEquipmentChanged;
+	static LuaEventQueue<Ship,const char *> *luaOnShipFuelChanged;
+
+	static LuaNameGen *luaNameGen;
 
 	static MTRand rng;
 	static int statSceneTris;
@@ -132,7 +139,7 @@ public:
 	static void SetView(View *v);
 	static View *GetView() { return currentView; }
 
-#if DEVKEYS
+#if WITH_DEVKEYS
 	static bool showDebugInfo;
 #endif
 	static Player *player;
@@ -146,10 +153,10 @@ public:
 	static InfoView *infoView;
 	static LuaConsole *luaConsole;
 	static ShipCpanel *cpan;
-	static GLUquadric *gluQuadric;
 	static Sound::MusicPlayer &GetMusicPlayer() { return musicPlayer; }
+	static Graphics::Renderer* renderer; // blargh
 
-#if OBJECTVIEWER
+#if WITH_OBJECTVIEWER
 	static ObjectViewerView *objectViewerView;
 #endif
 
@@ -159,9 +166,8 @@ public:
 	static const char * const combatRating[];
 
 	static struct DetailLevel detail;
-	static GameConfig config;
+	static GameConfig *config;
 private:
-	static void InitOpenGL();
 	static void HandleEvents();
 	static void InitJoysticks();
 

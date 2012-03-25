@@ -1,13 +1,23 @@
 #include "Terrain.h"
 #include "perlin.h"
 #include "Pi.h"
+#include "FileSystem.h"
 
 // static instancer. selects the best height and color classes for the body
 Terrain *Terrain::InstanceTerrain(const SBody *body)
 {
 	// special case for heightmaps
-	if (body->heightMapFilename)
-		return new TerrainGenerator<TerrainHeightMapped,TerrainColorEarthLike>(body);
+	// XXX this is terrible but will do for now until we get a unified
+	// heightmap setup. if you add another height fractal, remember to change
+	// the check in CustomSystem::l_height_map
+	if (body->heightMapFilename) {
+		const GeneratorInstancer choices[] = {
+			InstanceGenerator<TerrainHeightMapped,TerrainColorEarthLike>,
+			InstanceGenerator<TerrainHeightMapped2,TerrainColorRock>
+		};
+		assert(body->heightMapFractal < 2);
+		return choices[body->heightMapFractal](body);
+	}
 
 	MTRand rand(body->seed);
 
@@ -274,20 +284,63 @@ Terrain *Terrain::InstanceTerrain(const SBody *body)
 	return gi(body);
 }
 
-Terrain::Terrain(const SBody *body) : m_body(body), m_rand(body->seed), m_heightMap(0) {
+static size_t bufread_or_die(void *ptr, size_t size, size_t nmemb, ByteRange &buf)
+{
+	size_t read_count = buf.read(reinterpret_cast<char*>(ptr), size, nmemb);
+	if (read_count < nmemb) {
+		fprintf(stderr, "Error: failed to read file (truncated)\n");
+		abort();
+	}
+	return read_count;
+}
+
+Terrain::Terrain(const SBody *body) : m_body(body), m_rand(body->seed), m_heightMap(0), m_heightMapScaled(0), m_heightScaling(0), m_minh(0) {
 
 	// load the heightmap
 	if (m_body->heightMapFilename) {
-		FILE *f;
-		f = fopen_or_die(m_body->heightMapFilename, "rb");
+		RefCountedPtr<FileSystem::FileData> fdata = FileSystem::gameDataFiles.ReadFile(m_body->heightMapFilename);
+		if (!fdata) {
+			fprintf(stderr, "Error: could not open file '%s'\n", m_body->heightMapFilename);
+			abort();
+		}
+
+		ByteRange databuf = fdata->AsByteRange();
+
 		// read size!
 		Uint16 v;
-		fread_or_die(&v, 2, 1, f); m_heightMapSizeX = v;
-		fread_or_die(&v, 2, 1, f); m_heightMapSizeY = v;
-		m_heightMap = new Sint16[m_heightMapSizeX * m_heightMapSizeY];
-		// XXX TODO XXX what about bigendian archs...
-		fread_or_die(m_heightMap, sizeof(Sint16), m_heightMapSizeX * m_heightMapSizeY, f);
-		fclose(f);
+
+		// XXX unify heightmap types
+		switch (m_body->heightMapFractal) {
+			case 0: {
+				bufread_or_die(&v, 2, 1, databuf); m_heightMapSizeX = v;
+				bufread_or_die(&v, 2, 1, databuf); m_heightMapSizeY = v;
+
+				m_heightMap = new Sint16[m_heightMapSizeX * m_heightMapSizeY];
+				bufread_or_die(m_heightMap, sizeof(Sint16), m_heightMapSizeX * m_heightMapSizeY, databuf);
+				break;
+			}
+
+			case 1: {
+				// XXX x and y reversed from above *sigh*
+				bufread_or_die(&v, 2, 1, databuf); m_heightMapSizeY = v;
+				bufread_or_die(&v, 2, 1, databuf); m_heightMapSizeX = v;
+
+				// read height scaling and min height which are doubles
+				double te;
+				bufread_or_die(&te, 8, 1, databuf);
+				m_heightScaling = te;
+				bufread_or_die(&te, 8, 1, databuf);
+				m_minh = te;
+
+				m_heightMapScaled = new Uint16[m_heightMapSizeX * m_heightMapSizeY];
+				bufread_or_die(m_heightMapScaled, sizeof(Uint16), m_heightMapSizeX * m_heightMapSizeY, databuf);
+
+				break;
+			}
+
+			default:
+				assert(0);
+		}
 	}
 
 	switch (Pi::detail.textures) {
@@ -450,6 +503,8 @@ Terrain::~Terrain()
 {
 	if (m_heightMap)
 		delete [] m_heightMap;
+	if (m_heightMapScaled)
+		delete [] m_heightMapScaled;
 }
 
 

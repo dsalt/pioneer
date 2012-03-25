@@ -1047,31 +1047,6 @@ define_model('eagle_lrf', {
 		bounding_radius = 30,
 		materials={'steel', 'cutout', 'win'},
 		tags = {'ship'},
-		ship_defs = {
-			{
-				name='Eagle Long Range Fighter',
-				forward_thrust = -34e5,
-				reverse_thrust = 17e5,
-				up_thrust = 8e5,
-				down_thrust = -8e5,
-				left_thrust = -8e5,
-				right_thrust = 8e5,
-				angular_thrust = 64e5,
-				gun_mounts =
-				{
-					{ v(0,-.7,-40), v(0,0,-1) },
-					{ v(0,-.7,25), v(0,0,1) },
-				},
-				max_cargo = 20,
-				max_missile = 2,
-				max_fuelscoop = 0,
-				max_cargoscoop = 0,
-				capacity = 20,
-				hull_mass = 15,
-				price = 38000,
-				hyperdrive_class = 1,
-			}
-		}
 	},
 
 	static = function(lod)
@@ -1197,31 +1172,6 @@ define_model('eagle_mk2', {
 		bounding_radius = 30,
 		materials={'chrome', 'cutout', 'win'},
 		tags = {'ship'},
-		ship_defs = {
-			{
-				name='Eagle MK-II',
-				forward_thrust = -34e5,
-				reverse_thrust = 17e5,
-				up_thrust = 8e5,
-				down_thrust = -8e5,
-				left_thrust = -8e5,
-				right_thrust = 8e5,
-				angular_thrust = 64e5,
-				gun_mounts =
-				{
-					{ v(0,-.7,-40), v(0,0,-1) },
-					{ v(0,-.7,25), v(0,0,1) },
-				},
-				max_cargo = 22,
-				max_missile = 2,
-				max_fuelscoop = 0,
-				max_cargoscoop = 0,
-				capacity = 22,
-				hull_mass = 15,
-				price = 41000,
-				hyperdrive_class = 1,
-			}
-		}
 	},
 
 	static = function(lod)
@@ -1330,31 +1280,6 @@ define_model('eagle_mk3', {
 		bounding_radius = 30,
 		materials={'chrome', 'e_glow', 'win', 'cutout'},
 		tags = {'ship'},
-		ship_defs = {
-			{
-				name='Eagle MK-III',
-				forward_thrust = -36e5,
-				reverse_thrust = 25e5,
-				up_thrust = 8e5,
-				down_thrust = -8e5,
-				left_thrust = -8e5,
-				right_thrust = 8e5,
-				angular_thrust = 64e5,
-				gun_mounts =
-				{
-					{ v(0,-.7,-40), v(0,0,-1) },
-					{ v(0,-.7,25), v(0,0,1) },
-				},
-				max_cargo = 22,
-				max_missile = 2,
-				max_fuelscoop = 0,
-				max_cargoscoop = 0,
-				capacity = 22,
-				hull_mass = 15,
-				price = 43000,
-				hyperdrive_class = 1,
-			}
-		}
 	},
 
 	static = function(lod)
@@ -1473,32 +1398,6 @@ define_model('eagle_mk4', {
 		bounding_radius = 30,
 		materials={'chrome', 'cv2', 'e_glow', 'win', 'cutout'},
 		tags = {'ship'},
-		ship_defs = {
-			{
-				name='Eagle MK-IV "Bomber"',
-				forward_thrust = -50e5,
-				reverse_thrust = 25e5,
-				up_thrust = 14e5,
-				down_thrust = -12e5,
-				left_thrust = -12e5,
-				right_thrust = 12e5,
-				angular_thrust = 90e5,
-				gun_mounts =
-				{
-					{ v(0,-.7,-40), v(0,0,-1) },
-					{ v(0,-.7,25), v(0,0,1) },
-				},
-				max_cargo = 36,
-				max_laser = 2,
-				max_missile = 6,
-				max_fuelscoop = 1,
-				max_cargoscoop = 1,
-				capacity = 36,
-				hull_mass = 20,
-				price = 56000,
-				hyperdrive_class = 2,
-			}
-		}
 	},
 
 	static = function(lod)

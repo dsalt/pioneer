@@ -11,10 +11,10 @@ public:
 		ColourMarkupSkip, // skips markup tags
 		ColourMarkupUse   // interprets markup tags
 	};
-	explicit TextLayout(const char *_str, TextureFont *font = 0, ColourMarkupMode markup = ColourMarkupUse);
-	void Render(float layoutWidth) const;
+	explicit TextLayout(const char *_str, RefCountedPtr<TextureFont> font = RefCountedPtr<TextureFont>(0), ColourMarkupMode markup = ColourMarkupUse);
+	void Render(float layoutWidth, const Color &color = Color::WHITE) const;
 	void MeasureSize(const float layoutWidth, float outSize[2]) const;
-	void _RenderRaw(float layoutWidth) const;
+	void _RenderRaw(float layoutWidth, const Color &color) const;
 	void _MeasureSizeRaw(const float layoutWidth, float outSize[2]) const;
 	~TextLayout() { free(str); }
 	void SetJustified(bool v) { m_justify = v; }
@@ -29,7 +29,7 @@ private:
 	bool m_justify;
 	ColourMarkupMode m_colourMarkup;
 
-	TextureFont *m_font;
+	RefCountedPtr<TextureFont> m_font;
 };
 }
 

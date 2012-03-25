@@ -11,6 +11,8 @@ class LmrGeomBuffer;
 class LmrCollMesh;
 class GeomTree;
 
+namespace Graphics { class Renderer; }
+
 class EquipSet;
 
 #define LMR_MAX_LOD 4
@@ -84,7 +86,7 @@ private:
 	friend class LmrGeomBuffer;
 };
 
-void LmrModelCompilerInit();
+void LmrModelCompilerInit(Graphics::Renderer *r);
 void LmrModelCompilerUninit();
 struct LmrModelNotFoundException {};
 LmrModel *LmrLookupModelByName(const char *name);

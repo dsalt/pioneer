@@ -215,8 +215,6 @@ OTHER_GRAPHICS_SETTINGS
     Druge grafičke postavke
 USE_SHADERS
     Koristi shaders
-USE_HDR
-    Koristi HDR osvjetljavanje (izgleda super)
 SOUND_SETTINGS
     Postavke zvuka
 VOL_MASTER
@@ -935,10 +933,6 @@ VAST_STRIP_MINE
     Kolonija neizmjernog rudarenja.
 HIGH_POPULATION_OUTDOOR_WORLD
     Vanjski svijet ogromne populacije.
-SOMEWHERE_SPACEPORT
-    Svemirska luka %spaceport
-SOMEWHERE_STARPORT
-    Zvijezdana luka %starport
 MASS
     Masa
 N_WHATEVER_MASSES

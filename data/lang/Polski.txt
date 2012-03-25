@@ -218,8 +218,6 @@ OTHER_GRAPHICS_SETTINGS
     Inne ustawienia graficzne
 USE_SHADERS
     Użyj cieniowania
-USE_HDR
-    Użyj HDR Lighting (fajnie wygląda)
 SOUND_SETTINGS
     Ustawienia dźwięku
 VOL_MASTER
@@ -941,10 +939,6 @@ VAST_STRIP_MINE
     Ogromne kolonie górnicze.
 HIGH_POPULATION_OUTDOOR_WORLD
     Zewnętrzny świat o wysokim zaludnieniu.
-SOMEWHERE_SPACEPORT
-    stacja kosmiczna %spaceport
-SOMEWHERE_STARPORT
-    port kosmiczny %starport
 MASS
     Masa
 N_WHATEVER_MASSES

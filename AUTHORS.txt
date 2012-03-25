@@ -1,4 +1,4 @@
-The Pioneer team are (9 December 2011, alpha 17):
+The Pioneer team are (9 March 2012, alpha 20):
 
 Project leads: Tom Morton, John Jordan
 
@@ -20,6 +20,10 @@ Programming:
   Benjamin Hodgetts
   Sean Bailey
   Brian Ronald
+  Taiki Kim
+  Craig Thomson
+  Ae
+  Benamucki
 
 Art:
   Gernot
@@ -48,6 +52,7 @@ Translations:
   Alessandro Giachi
   Paul Mahol
   Thierry Dupré
+  Asier Basagoiti
 
 Thanks to those that have moved on (we hope to see you back!)
 
