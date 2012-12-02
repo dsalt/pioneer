@@ -1,8 +1,10 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "ShipSpinnerWidget.h"
 #include "Pi.h"
 #include "Game.h"
 #include "Ship.h"
-#include "Light.h"
 #include "graphics/Graphics.h"
 #include "graphics/Renderer.h"
 
@@ -10,7 +12,7 @@ ShipSpinnerWidget::ShipSpinnerWidget(const ShipFlavour &flavour, float width, fl
 	m_width(width),
 	m_height(height)
 {
-	m_model = LmrLookupModelByName(ShipType::types[flavour.type].lmrModelName.c_str());
+	m_model = LmrLookupModelByName(ShipType::types[flavour.id].lmrModelName.c_str());
 
 	memset(&m_params, 0, sizeof(LmrObjParams));
 	m_params.animationNamespace = "ShipAnimation";
@@ -24,7 +26,7 @@ ShipSpinnerWidget::ShipSpinnerWidget(const ShipFlavour &flavour, float width, fl
 	m_light.SetAmbient(lc);
 	m_light.SetSpecular(lc);
 	m_light.SetPosition(vector3f(1.f, 1.f, 0.f));
-	m_light.SetType(Light::LIGHT_DIRECTIONAL);
+	m_light.SetType(Graphics::Light::LIGHT_DIRECTIONAL);
 }
 
 void ShipSpinnerWidget::Draw()
@@ -71,7 +73,7 @@ void ShipSpinnerWidget::Draw()
 		int(roundf((Gui::Screen::GetHeight() - pos[1] - m_height)/guiscale[1])),
 		int(m_width/guiscale[0]),
 		int(m_height/guiscale[1]));
-	
+
 	matrix4x4f rot = matrix4x4f::RotateXMatrix(rot1);
 	rot.RotateY(rot2);
 	rot[14] = -1.5f * m_model->GetDrawClipRadius();

@@ -1,12 +1,16 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "libs.h"
 #include "gui/Gui.h"
 #include "Pi.h"
 #include "SectorView.h"
-#include "Sector.h"
+#include "galaxy/Sector.h"
+#include "galaxy/StarSystem.h"
 #include "SystemInfoView.h"
+#include "LuaFaction.h"
 #include "Player.h"
 #include "Serializer.h"
-#include "StarSystem.h"
 #include "GalacticView.h"
 #include "Lang.h"
 #include "StringF.h"
@@ -14,16 +18,30 @@
 #include "Game.h"
 #include "graphics/Material.h"
 #include "graphics/Renderer.h"
+#include <algorithm>
+#include <sstream>
 
 using namespace Graphics;
 
 #define INNER_RADIUS (Sector::SIZE*1.5f)
 #define OUTER_RADIUS (Sector::SIZE*3.0f)
+#define FAR_THRESHOLD 5.f
+#define FAR_LIMIT     36.f
+#define FAR_MAX       46.f
+
+enum DetailSelection {
+	DETAILBOX_NONE    = 0
+,	DETAILBOX_INFO    = 1
+,	DETAILBOX_FACTION = 2
+};
+
+static const float ZOOM_SPEED = 15;
+static const float WHEEL_SENSITIVITY = .03f;		// Should be a variable in user settings.
 
 SectorView::SectorView()
 {
 	InitDefaults();
-	
+
 	m_rotX = m_rotXMovingTo = m_rotXDefault;
 	m_rotZ = m_rotZMovingTo = m_rotZDefault;
 	m_zoom = m_zoomMovingTo = m_zoomDefault;
@@ -39,9 +57,10 @@ SectorView::SectorView()
 	GotoSystem(m_current);
 	m_pos = m_posMovingTo;
 
-	m_matchTargetToSelection = true;
+	m_matchTargetToSelection   = true;
 	m_selectionFollowsMovement = true;
-	m_infoBoxVisible = true;
+	m_detailBoxVisible         = DETAILBOX_INFO;
+	m_toggledFaction           = false;
 
 	InitObject();
 }
@@ -62,7 +81,7 @@ SectorView::SectorView(Serializer::Reader &rd)
 	m_hyperspaceTarget = SystemPath::Unserialize(rd);
 	m_matchTargetToSelection = rd.Bool();
 	m_selectionFollowsMovement = rd.Bool();
-	m_infoBoxVisible = rd.Bool();
+	m_detailBoxVisible = rd.Byte();
 
 	InitObject();
 }
@@ -74,11 +93,20 @@ void SectorView::InitDefaults()
 	m_zoomDefault = Pi::config->Float("SectorViewZoom");
 	m_rotXDefault = Clamp(m_rotXDefault, -170.0f, -10.0f);
 	m_zoomDefault = Clamp(m_zoomDefault, 0.1f, 5.0f);
+	m_previousSearch = "";
+
+	m_secPosFar  = vector3f(INT_MAX, INT_MAX, INT_MAX);
+	m_radiusFar  = 0;
+	m_cacheXMin = 0;
+	m_cacheXMax = 0;
+	m_cacheYMin = 0;
+	m_cacheYMax = 0;
+	m_cacheYMin = 0;
+	m_cacheYMax = 0;
 }
-		
+
 void SectorView::InitObject()
 {
-	m_disk = new VertexArray(ATTRIB_POSITION);
 	SetTransparency(true);
 
 	Gui::Screen::PushFont("OverlayFont");
@@ -91,13 +119,18 @@ void SectorView::InitObject()
 	Add(m_sectorLabel, 2, Gui::Screen::GetHeight()-Gui::Screen::GetFontHeight()*2-66);
 	m_distanceLabel = new Gui::Label("");
 	Add(m_distanceLabel, 2, Gui::Screen::GetHeight()-Gui::Screen::GetFontHeight()-66);
-	
+
 	m_zoomInButton = new Gui::ImageButton("icons/zoom_in.png");
 	m_zoomInButton->SetToolTip(Lang::ZOOM_IN);
+	m_zoomInButton->SetRenderDimensions(30, 22);
 	Add(m_zoomInButton, 700, 5);
-	
+
+	m_zoomLevelLabel = (new Gui::Label(""))->Color(0.27f, 0.86f, 0.92f);
+	Add(m_zoomLevelLabel, 640, 5);
+
 	m_zoomOutButton = new Gui::ImageButton("icons/zoom_out.png");
 	m_zoomOutButton->SetToolTip(Lang::ZOOM_OUT);
+	m_zoomOutButton->SetRenderDimensions(30, 22);
 	Add(m_zoomOutButton, 732, 5);
 
 	Add(new Gui::Label(Lang::SEARCH), 650, 500);
@@ -105,18 +138,8 @@ void SectorView::InitObject()
 	m_searchBox->onKeyPress.connect(sigc::mem_fun(this, &SectorView::OnSearchBoxKeyPress));
 	Add(m_searchBox, 700, 500);
 
-	// selection highlight disk
-	// (wound counterclockwise)
-	// color will be determined by a material
-	m_disk->Add(vector3f(0.f, 0.f, 0.f));
-	const float rad = 0.2f;
-	for (int i = 72; i >= 0; i--) {
-		m_disk->Add(vector3f(
-			0.f+sinf(DEG2RAD(i*5))*rad,
-			0.f+cosf(DEG2RAD(i*5))*rad,
-			0.f));
-	}
-	
+	m_disk.Reset(new Graphics::Drawables::Disk(Pi::renderer, Color::WHITE, 0.2f));
+
 	m_infoBox = new Gui::VBox();
 	m_infoBox->SetTransparency(false);
 	m_infoBox->SetBgColor(0.05f, 0.05f, 0.12f, 0.5f);
@@ -188,19 +211,25 @@ void SectorView::InitObject()
 	systemBox->PackEnd(m_targetSystemLabels.shortDesc);
 	m_infoBox->PackEnd(systemBox);
 
-	m_onMouseButtonDown = 
+	m_onMouseButtonDown =
 		Pi::onMouseButtonDown.connect(sigc::mem_fun(this, &SectorView::MouseButtonDown));
-	
+
 	UpdateSystemLabels(m_currentSystemLabels, m_current);
 	UpdateSystemLabels(m_selectedSystemLabels, m_selected);
 	UpdateSystemLabels(m_targetSystemLabels, m_hyperspaceTarget);
 
 	UpdateHyperspaceLockLabel();
+
+	m_factionBox = new Gui::VBox();
+	m_factionBox->SetTransparency(false);
+	m_factionBox->SetBgColor(0.05f, 0.05f, 0.12f, 0.5f);
+	m_factionBox->SetSpacing(5.0f);
+	m_factionBox->HideAll();
+	Add(m_factionBox, 5, 5);
 }
 
 SectorView::~SectorView()
 {
-	delete m_disk;
 	m_onMouseButtonDown.disconnect();
 	if (m_onKeyPressConnection.connected()) m_onKeyPressConnection.disconnect();
 }
@@ -219,23 +248,36 @@ void SectorView::Save(Serializer::Writer &wr)
 	m_hyperspaceTarget.Serialize(wr);
 	wr.Bool(m_matchTargetToSelection);
 	wr.Bool(m_selectionFollowsMovement);
-	wr.Bool(m_infoBoxVisible);
+	wr.Byte(m_detailBoxVisible);
 }
 
 void SectorView::OnSearchBoxKeyPress(const SDL_keysym *keysym)
 {
-	if (keysym->sym != SDLK_RETURN)
+	//remember the last search text, hotkey: up
+	if (m_searchBox->GetText().empty() && keysym->sym == SDLK_UP && !m_previousSearch.empty())
+		m_searchBox->SetText(m_previousSearch);
+
+	if (keysym->sym != SDLK_KP_ENTER && keysym->sym != SDLK_RETURN)
 		return;
 
-	const std::string search = m_searchBox->GetText();
+	std::string search = m_searchBox->GetText();
 	if (!search.size())
 		return;
-	
+
+	m_previousSearch = search;
+
+	//Try to detect if user entered a sector address, comma or space separated, strip parentheses
+	//system index is unreliable, so it is not supported
+	try {
+		GotoSector(SystemPath::Parse(search.c_str()));
+		return;
+	} catch (SystemPath::ParseFailure) {}
+
 	bool gotMatch = false, gotStartMatch = false;
 	SystemPath bestMatch;
 	const std::string *bestMatchName = 0;
 
-	for (std::map<SystemPath,Sector*>::iterator i = m_sectorCache.begin(); i != m_sectorCache.end(); i++)
+	for (std::map<SystemPath,Sector*>::iterator i = m_sectorCache.begin(); i != m_sectorCache.end(); ++i)
 
 		for (unsigned int systemIndex = 0; systemIndex < (*i).second->m_systems.size(); systemIndex++) {
 			const Sector::System *ss = &((*i).second->m_systems[systemIndex]);
@@ -256,7 +298,7 @@ void SectorView::OnSearchBoxKeyPress(const SDL_keysym *keysym)
 
 				// partial match at start of name
 				if (!gotMatch || !gotStartMatch || bestMatchName->size() > ss->name.size()) {
-					
+
 					// don't already have one or its shorter than the previous
 					// one, take it
 					bestMatch = (*i).first;
@@ -282,7 +324,7 @@ void SectorView::OnSearchBoxKeyPress(const SDL_keysym *keysym)
 				}
 			}
 		}
-	
+
 	if (gotMatch) {
 		Pi::cpan->MsgLog()->Message("", stringf(Lang::NOT_FOUND_BEST_MATCH_X, formatarg("system", *bestMatchName)));
 		GotoSystem(bestMatch);
@@ -293,23 +335,25 @@ void SectorView::OnSearchBoxKeyPress(const SDL_keysym *keysym)
 }
 
 
-#define DRAW_RAD	3
-
+#define DRAW_RAD	  3
 #define FFRAC(_x)	((_x)-floor(_x))
 
 void SectorView::Draw3D()
 {
 	m_clickableLabels->Clear();
 
-	m_renderer->SetPerspectiveProjection(40.f, Pi::GetScrAspect(), 1.f, 100.f);
+	if (m_zoomClamped <= FAR_THRESHOLD) m_renderer->SetPerspectiveProjection(40.f, Pi::GetScrAspect(), 1.f, 100.f);
+	else                                m_renderer->SetPerspectiveProjection(40.f, Pi::GetScrAspect(), 1.f, 600.f);
 
 	matrix4x4f modelview = matrix4x4f::Identity();
 	m_renderer->ClearScreen();
-	
+
 	m_sectorLabel->SetText(stringf(Lang::SECTOR_X_Y_Z,
 		formatarg("x", int(floorf(m_pos.x))),
 		formatarg("y", int(floorf(m_pos.y))),
 		formatarg("z", int(floorf(m_pos.z)))));
+
+	m_zoomLevelLabel->SetText(stringf(Lang::NUMBER_LY, formatarg("distance", ((m_zoomClamped/FAR_THRESHOLD )*(OUTER_RADIUS)) + 0.5 * Sector::SIZE)));
 
 	if (m_inSystem) {
 		vector3f dv = vector3f(floorf(m_pos.x)-m_current.sectorX, floorf(m_pos.y)-m_current.sectorY, floorf(m_pos.z)-m_current.sectorZ) * Sector::SIZE;
@@ -320,7 +364,7 @@ void SectorView::Draw3D()
 	}
 
 	// units are lightyears, my friend
-	modelview.Translate(0.f, 0.f, -10.f-10.f*m_zoom);
+	modelview.Translate(0.f, 0.f, -10.f-10.f*m_zoom);    // not zoomClamped, let us zoom out a bit beyond what we're drawing
 	modelview.Rotate(DEG2RAD(m_rotX), 1.f, 0.f, 0.f);
 	modelview.Rotate(DEG2RAD(m_rotZ), 0.f, 0.f, 1.f);
 	modelview.Translate(-FFRAC(m_pos.x)*Sector::SIZE, -FFRAC(m_pos.y)*Sector::SIZE, -FFRAC(m_pos.z)*Sector::SIZE);
@@ -328,17 +372,10 @@ void SectorView::Draw3D()
 
 	m_renderer->SetBlendMode(BLEND_ALPHA);
 
-	Sector *playerSec = GetCached(m_current.sectorX, m_current.sectorY, m_current.sectorZ);
-	vector3f playerPos = Sector::SIZE * vector3f(float(m_current.sectorX), float(m_current.sectorY), float(m_current.sectorZ)) + playerSec->m_systems[m_current.systemIndex].p;
+	if (m_zoomClamped <= FAR_THRESHOLD) DrawNearSectors(modelview);
+	else                                DrawFarSectors(modelview);
 
-	for (int sx = -DRAW_RAD; sx <= DRAW_RAD; sx++) {
-		for (int sy = -DRAW_RAD; sy <= DRAW_RAD; sy++) {
-			for (int sz = -DRAW_RAD; sz <= DRAW_RAD; sz++) {
-				DrawSector(int(floorf(m_pos.x))+sx, int(floorf(m_pos.y))+sy, int(floorf(m_pos.z))+sz, playerPos,
-					modelview * matrix4x4f::Translation(Sector::SIZE*sx, Sector::SIZE*sy, Sector::SIZE*sz));
-			}
-		}
-	}
+	UpdateFactionToggles();
 
 	m_renderer->SetBlendMode(BLEND_SOLID);
 }
@@ -377,6 +414,14 @@ void SectorView::ResetHyperspaceTarget()
 	}
 }
 
+void SectorView::GotoSector(const SystemPath &path)
+{
+	m_posMovingTo = vector3f(path.sectorX, path.sectorY, path.sectorZ);
+
+	// for performance don't animate the travel if we're Far Zoomed
+	if (m_zoomClamped > FAR_THRESHOLD) m_pos = m_posMovingTo;
+}
+
 void SectorView::GotoSystem(const SystemPath &path)
 {
 	Sector* ps = GetCached(path.sectorX, path.sectorY, path.sectorZ);
@@ -384,13 +429,16 @@ void SectorView::GotoSystem(const SystemPath &path)
 	m_posMovingTo.x = path.sectorX + p.x/Sector::SIZE;
 	m_posMovingTo.y = path.sectorY + p.y/Sector::SIZE;
 	m_posMovingTo.z = path.sectorZ + p.z/Sector::SIZE;
+
+	// for performance don't animate the travel if we're Far Zoomed
+	if (m_zoomClamped > FAR_THRESHOLD) m_pos = m_posMovingTo;
 }
 
 void SectorView::SetSelectedSystem(const SystemPath &path)
 {
     m_selected = path;
 
-	if (m_matchTargetToSelection) {
+	if (m_matchTargetToSelection && m_selected != m_current) {
 		m_hyperspaceTarget = m_selected;
 		onHyperspaceTargetChanged.emit();
 		UpdateSystemLabels(m_targetSystemLabels, m_hyperspaceTarget);
@@ -407,12 +455,79 @@ void SectorView::OnClickSystem(const SystemPath &path)
 		SetSelectedSystem(path);
 }
 
-void SectorView::PutClickableLabel(const std::string &text, const Color &labelCol, const SystemPath &path)
+void SectorView::PutSystemLabels(Sector *sec, const vector3f &origin, int drawRadius)
 {
+	int num=0;
+	for (std::vector<Sector::System>::iterator sys = sec->m_systems.begin(); sys !=sec->m_systems.end(); ++sys, ++num) {
+		// skip the system if it doesn't fall within the sphere we're viewing.
+		if ((m_pos*Sector::SIZE - (*sys).FullPosition()).Length() > drawRadius) continue;
+
+		// skip the system if it belongs to a Faction we've toggled off
+		if (m_hiddenFactions.find((*sys).faction) != m_hiddenFactions.end()) continue;
+
+		// place the label
+		vector3d systemPos = vector3d((*sys).FullPosition() - origin);
+		vector3d screenPos;
+		if (Gui::Screen::Project(systemPos, screenPos)) {
+			// work out the colour
+			float dist = Sector::DistanceBetween(sec, num, GetCached(m_current.sectorX, m_current.sectorY, m_current.sectorZ), m_current.systemIndex);
+			Color labelColor = (*sys).faction->AdjustedColour((*sys).population, dist <= m_playerHyperspaceRange);
+
+			// get a system path to pass to the event handler when the label is licked
+			SystemPath sysPath = SystemPath((*sys).sx, (*sys).sy, (*sys).sz, num);
+
+			// setup the label
+			m_clickableLabels->Add((*sys).name, sigc::bind(sigc::mem_fun(this, &SectorView::OnClickSystem), sysPath), screenPos.x, screenPos.y, labelColor);
+		}
+	}
+}
+
+void SectorView::PutFactionLabels(const vector3f &origin)
+{
+	glDepthRange(0,1);
 	Gui::Screen::EnterOrtho();
-	vector3d pos;
-	if (Gui::Screen::Project(vector3d(0.0), pos)) {
-		m_clickableLabels->Add(text, sigc::bind(sigc::mem_fun(this, &SectorView::OnClickSystem), path), pos.x, pos.y, labelCol);
+	for (std::set<Faction*>::iterator it = m_visibleFactions.begin(); it != m_visibleFactions.end(); ++it) {
+		if ((*it)->hasHomeworld && m_hiddenFactions.find((*it)) == m_hiddenFactions.end()) {
+
+			Sector::System sys = GetCached((*it)->homeworld)->m_systems[(*it)->homeworld.systemIndex];
+			if ((m_pos*Sector::SIZE - sys.FullPosition()).Length() > (m_zoomClamped/FAR_THRESHOLD )*OUTER_RADIUS) continue;
+
+			vector3d pos;
+			if (Gui::Screen::Project(vector3d(sys.FullPosition() - origin), pos)) {
+
+				std::string labelText    = sys.name + "\n" + (*it)->name;
+				Color       labelColor  = (*it)->colour;
+				float       labelHeight = 0;
+				float       labelWidth  = 0;
+
+				Gui::Screen::MeasureString(labelText, labelWidth, labelHeight);
+
+				if (!m_material) m_material.Reset(m_renderer->CreateMaterial(Graphics::MaterialDescriptor()));
+
+				{
+					Graphics::VertexArray va(Graphics::ATTRIB_POSITION);
+					va.Add(vector3f(pos.x - 5.f,              pos.y - 5.f,               0));
+					va.Add(vector3f(pos.x - 5.f,              pos.y - 5.f + labelHeight, 0));
+					va.Add(vector3f(pos.x + labelWidth + 5.f, pos.y - 5.f,               0));
+					va.Add(vector3f(pos.x + labelWidth + 5.f, pos.y - 5.f + labelHeight, 0));
+					m_material->diffuse = Color(0.05f, 0.05f, 0.12f, 0.65f);
+					m_renderer->DrawTriangles(&va, m_material.Get(), Graphics::TRIANGLE_STRIP);
+				}
+
+				{
+					Graphics::VertexArray va(Graphics::ATTRIB_POSITION);
+					va.Add(vector3f(pos.x - 8.f, pos.y,       0));
+					va.Add(vector3f(pos.x      , pos.y + 8.f, 0));
+					va.Add(vector3f(pos.x,       pos.y - 8.f, 0));
+					va.Add(vector3f(pos.x + 8.f, pos.y,       0));
+					m_material->diffuse = labelColor;
+					m_renderer->DrawTriangles(&va, m_material.Get(), Graphics::TRIANGLE_STRIP);
+				}
+
+				if (labelColor.GetLuminance() > 0.75f) labelColor.a = 0.8f;    // luminance is sometimes a bit overly
+				m_clickableLabels->Add(labelText, sigc::bind(sigc::mem_fun(this, &SectorView::OnClickSystem), (*it)->homeworld), pos.x, pos.y, labelColor);
+			}
+		}
 	}
 	Gui::Screen::LeaveOrtho();
 }
@@ -426,12 +541,12 @@ void SectorView::UpdateSystemLabels(SystemLabels &labels, const SystemPath &path
 
 	if (m_inSystem) {
 		const float dist = Sector::DistanceBetween(sec, path.systemIndex, playerSec, m_current.systemIndex);
-		
+
 		int fuelRequired;
 		double dur;
 		enum Ship::HyperjumpStatus jumpStatus
 			= Pi::player->GetHyperspaceDetails(&path, fuelRequired, dur);
-		const double DaysNeeded = dur*(1.0 / (24*60*60)); 
+		const double DaysNeeded = dur*(1.0 / (24*60*60));
 		const double HoursNeeded = (DaysNeeded - floor(DaysNeeded))*24;
 
 		switch (jumpStatus) {
@@ -488,11 +603,93 @@ void SectorView::UpdateSystemLabels(SystemLabels &labels, const SystemPath &path
 	labels.systemName->SetText(sys->GetName());
 	labels.shortDesc->SetText(sys->GetShortDescription());
 
-	if (m_infoBoxVisible)
-		m_infoBox->ShowAll();
+	if (m_detailBoxVisible == DETAILBOX_INFO) m_infoBox->ShowAll();
 }
 
-void SectorView::DrawSector(int sx, int sy, int sz, const vector3f &playerAbsPos,const matrix4x4f &trans)
+void SectorView::OnToggleFaction(Gui::ToggleButton* button, bool pressed, Faction* faction)
+{
+	// hide or show the faction's systems depending on whether the button is pressed
+	if (pressed) m_hiddenFactions.erase(faction);
+	else         m_hiddenFactions.insert(faction);
+
+	m_toggledFaction = true;
+}
+
+void SectorView::UpdateFactionToggles()
+{
+	// make sure we have enough row in the ui
+	while (m_visibleFactionLabels.size() < m_visibleFactions.size()) {
+		Gui::HBox*         row    = new Gui::HBox();
+		Gui::ToggleButton* toggle = new Gui::ToggleButton();
+		Gui::Label*        label  = new Gui::Label("");
+
+		toggle->SetToolTip("");
+		label ->SetToolTip("");
+
+		m_visibleFactionToggles.push_back(toggle);
+		m_visibleFactionLabels.push_back(label);
+		m_visibleFactionRows.push_back(row);
+
+		row->SetSpacing(5.0f);
+		row->PackEnd(toggle);
+		row->PackEnd(label);
+		m_factionBox->PackEnd(row);
+	}
+
+	// set up the faction labels, and the toggle buttons
+	Uint32 rowIdx = 0;
+	for (std::set<Faction*>::iterator it = m_visibleFactions.begin(); it != m_visibleFactions.end(); ++it, ++rowIdx) {
+		m_visibleFactionLabels [rowIdx]->SetText((*it)->name);
+		m_visibleFactionLabels [rowIdx]->Color((*it)->colour);
+		m_visibleFactionToggles[rowIdx]->onChange.clear();
+		m_visibleFactionToggles[rowIdx]->SetPressed(m_hiddenFactions.find((*it)) == m_hiddenFactions.end());
+		m_visibleFactionToggles[rowIdx]->onChange.connect(sigc::bind(sigc::mem_fun(this, &SectorView::OnToggleFaction),*it));
+		m_visibleFactionRows   [rowIdx]->ShowAll();
+	}
+
+	// hide any rows, and disconnect any toggle event handler, that we're not using
+	for (; rowIdx < m_visibleFactionLabels.size(); rowIdx++) {
+		m_visibleFactionToggles[rowIdx]->onChange.clear();
+		m_visibleFactionRows   [rowIdx]->Hide();
+	}
+
+	if  (m_detailBoxVisible == DETAILBOX_FACTION) m_factionBox->Show();
+	else                                          m_factionBox->HideAll();
+}
+
+void SectorView::DrawNearSectors(matrix4x4f modelview)
+{
+	m_visibleFactions.clear();
+
+	Sector *playerSec = GetCached(m_current.sectorX, m_current.sectorY, m_current.sectorZ);
+	vector3f playerPos = Sector::SIZE * vector3f(float(m_current.sectorX), float(m_current.sectorY), float(m_current.sectorZ)) + playerSec->m_systems[m_current.systemIndex].p;
+
+	for (int sx = -DRAW_RAD; sx <= DRAW_RAD; sx++) {
+		for (int sy = -DRAW_RAD; sy <= DRAW_RAD; sy++) {
+			for (int sz = -DRAW_RAD; sz <= DRAW_RAD; sz++) {
+				DrawNearSector(int(floorf(m_pos.x))+sx, int(floorf(m_pos.y))+sy, int(floorf(m_pos.z))+sz, playerPos,
+					modelview * matrix4x4f::Translation(Sector::SIZE*sx, Sector::SIZE*sy, Sector::SIZE*sz));
+			}
+		}
+	}
+
+	// ...then switch and do all the labels
+	const vector3f secOrigin = vector3f(int(floorf(m_pos.x)), int(floorf(m_pos.y)), int(floorf(m_pos.z)));
+
+	m_renderer->SetTransform(modelview);
+	glDepthRange(0,1);
+	Gui::Screen::EnterOrtho();
+	for (int sx = -DRAW_RAD; sx <= DRAW_RAD; sx++) {
+		for (int sy = -DRAW_RAD; sy <= DRAW_RAD; sy++) {
+			for (int sz = -DRAW_RAD; sz <= DRAW_RAD; sz++) {
+				PutSystemLabels(GetCached(sx + secOrigin.x, sy + secOrigin.y, sz + secOrigin.z), Sector::SIZE * secOrigin, Sector::SIZE * DRAW_RAD);
+			}
+		}
+	}
+	Gui::Screen::LeaveOrtho();
+}
+
+void SectorView::DrawNearSector(int sx, int sy, int sz, const vector3f &playerAbsPos,const matrix4x4f &trans)
 {
 	m_renderer->SetTransform(trans);
 	Sector* ps = GetCached(sx, sy, sz);
@@ -507,40 +704,43 @@ void SectorView::DrawSector(int sx, int sy, int sz, const vector3f &playerAbsPos
 			vector3f(Sector::SIZE, Sector::SIZE, 0.f),
 			vector3f(Sector::SIZE, 0.f, 0.f)
 		};
-	
+
 		m_renderer->DrawLines(4, vts, darkgreen, LINE_LOOP);
 	}
 
 	Uint32 num=0;
 	for (std::vector<Sector::System>::iterator i = ps->m_systems.begin(); i != ps->m_systems.end(); ++i, ++num) {
-		SystemPath current = SystemPath(sx, sy, sz, num);
-
+		// calculate where the system is in relation the centre of the view...
 		const vector3f sysAbsPos = Sector::SIZE*vector3f(float(sx), float(sy), float(sz)) + (*i).p;
 		const vector3f toCentreOfView = m_pos*Sector::SIZE - sysAbsPos;
 
+		// ...and skip the system if it doesn't fall within the sphere we're viewing.
 		if (toCentreOfView.Length() > OUTER_RADIUS) continue;
 
+		// if the system belongs to a faction we've chosen to temporarily hide then skip it as well.
+		m_visibleFactions.insert(i->faction);
+		if (m_hiddenFactions.find(i->faction) != m_hiddenFactions.end()) continue;
+
+
 		// don't worry about looking for inhabited systems if they're
-		// unexplored (same calculation as in StarSystem.cpp)
-		if (isqrt(1 + sx*sx + sy*sy + sz*sz) <= 90) {
+		// unexplored (same calculation as in StarSystem.cpp) or we've
+		// already retrieved their population.
+		SystemPath current = SystemPath(sx, sy, sz, num);
+
+		if ((*i).population < 0 && isqrt(1 + sx*sx + sy*sy + sz*sz) <= 90) {
 
 			// only do this once we've pretty much stopped moving.
 			vector3f diff = vector3f(
 					fabs(m_posMovingTo.x - m_pos.x),
 					fabs(m_posMovingTo.y - m_pos.y),
 					fabs(m_posMovingTo.z - m_pos.z));
+
 			// Ideally, since this takes so f'ing long, it wants to be done as a threaded job but haven't written that yet.
-			if( !(*i).IsSetInhabited() && diff.x < 0.001f && diff.y < 0.001f && diff.z < 0.001f ) {
+			if( (diff.x < 0.001f && diff.y < 0.001f && diff.z < 0.001f) ) {
 				RefCountedPtr<StarSystem> pSS = StarSystem::GetCached(current);
-				if( (!pSS->m_unexplored) && (pSS->m_spaceStations.size()>0) ) 
-				{
-					(*i).SetInhabited(true);
-				}
-				else
-				{
-					(*i).SetInhabited(false);
-				}
+				(*i).population = pSS->m_totalPop;
 			}
+
 		}
 
 		matrix4x4f systrans = trans * matrix4x4f::Translation((*i).p.x, (*i).p.y, (*i).p.z);
@@ -578,9 +778,6 @@ void SectorView::DrawSector(int sx, int sy, int sz, const vector3f &playerAbsPos
 			m_jumpLine.Draw(m_renderer);
 		}
 
-		Material mat;
-		mat.unlit = true;
-
 		// draw star blob itself
 		systrans.Rotate(DEG2RAD(-m_rotZ), 0, 0, 1);
 		systrans.Rotate(DEG2RAD(-m_rotX), 1, 0, 0);
@@ -588,46 +785,86 @@ void SectorView::DrawSector(int sx, int sy, int sz, const vector3f &playerAbsPos
 		m_renderer->SetTransform(systrans);
 
 		float *col = StarSystem::starColors[(*i).starType[0]];
-		mat.diffuse = Color(col[0], col[1], col[2]);
-		m_renderer->DrawTriangles(m_disk, &mat, TRIANGLE_FAN);
+		m_disk->SetColor(Color(col[0], col[1], col[2]));
+		m_disk->Draw(m_renderer);
 
 		// player location indicator
 		if (m_inSystem && current == m_current) {
 			glDepthRange(0.2,1.0);
-			mat.diffuse = Color(0.f, 0.f, 0.8f);
+			m_disk->SetColor(Color(0.f, 0.f, 0.8f));
 			m_renderer->SetTransform(systrans * matrix4x4f::ScaleMatrix(3.f));
-			m_renderer->DrawTriangles(m_disk, &mat, TRIANGLE_FAN);
+			m_disk->Draw(m_renderer);
 		}
 		// selected indicator
 		if (current == m_selected) {
 			glDepthRange(0.1,1.0);
-			mat.diffuse = Color(0.f, 0.8f, 0.0f);
+			m_disk->SetColor(Color(0.f, 0.8f, 0.f));
 			m_renderer->SetTransform(systrans * matrix4x4f::ScaleMatrix(2.f));
-			m_renderer->DrawTriangles(m_disk, &mat, TRIANGLE_FAN);
+			m_disk->Draw(m_renderer);
 		}
 		// hyperspace target indicator (if different from selection)
 		if (current == m_hyperspaceTarget && m_hyperspaceTarget != m_selected && (!m_inSystem || m_hyperspaceTarget != m_current)) {
 			glDepthRange(0.1,1.0);
-			mat.diffuse = Color(0.3f);
+			m_disk->SetColor(Color(0.3f));
 			m_renderer->SetTransform(systrans * matrix4x4f::ScaleMatrix(2.f));
-			m_renderer->DrawTriangles(m_disk, &mat, TRIANGLE_FAN);
+			m_disk->Draw(m_renderer);
 		}
+	}
+}
 
-		glDepthRange(0,1);
+void SectorView::DrawFarSectors(matrix4x4f modelview)
+{
+	int buildRadius = ceilf((m_zoomClamped/FAR_THRESHOLD) * 3);
+	if (buildRadius <= DRAW_RAD) buildRadius = DRAW_RAD;
 
-		Color labelColor(0.8f,0.8f,0.8f,0.5f);
-		if ((*i).IsSetInhabited() && (*i).IsInhabited()) {
-			labelColor.r = 0.5;
-			labelColor.b = labelColor.g = 1.0f;
-		}
+	const vector3f secOrigin = vector3f(int(floorf(m_pos.x)), int(floorf(m_pos.y)), int(floorf(m_pos.z)));
 
-		if (m_inSystem) {
-			float dist = Sector::DistanceBetween( ps, num, GetCached(m_current.sectorX, m_current.sectorY, m_current.sectorZ), m_current.systemIndex);
-			if (dist <= m_playerHyperspaceRange)
-				labelColor.a = 1.0f;
-		}
+	// build vertex and colour arrays for all the stars we want to see, if we don't already have them
+	if (m_toggledFaction || buildRadius != m_radiusFar || !secOrigin.ExactlyEqual(m_secPosFar)) {
+		m_farstars       .clear();
+		m_farstarsColor  .clear();
+		m_visibleFactions.clear();
 
-		PutClickableLabel((*i).name, labelColor, current);
+		for (int sx = secOrigin.x-buildRadius; sx <= secOrigin.x+buildRadius; sx++) {
+			for (int sy = secOrigin.y-buildRadius; sy <= secOrigin.y+buildRadius; sy++) {
+				for (int sz = secOrigin.z-buildRadius; sz <= secOrigin.z+buildRadius; sz++) {
+						if ((vector3f(sx,sy,sz) - secOrigin).Length() <= buildRadius){
+							BuildFarSector(GetCached(sx, sy, sz), Sector::SIZE * secOrigin, m_farstars, m_farstarsColor);
+						}
+					}
+				}
+			}
+
+		m_secPosFar      = secOrigin;
+		m_radiusFar      = buildRadius;
+		m_toggledFaction = false;
+	}
+
+	// always draw the stars, slightly altering their size for different different resolutions, so they still look okay
+	m_renderer->DrawPoints(m_farstars.size(), &m_farstars[0], &m_farstarsColor[0], 1.f + (Pi::GetScrHeight() / 720.f));
+
+	// also add labels for any faction homeworlds among the systems we've drawn
+	PutFactionLabels(Sector::SIZE * secOrigin);
+}
+
+void SectorView::BuildFarSector(Sector* sec, const vector3f &origin, std::vector<vector3f> &points, std::vector<Color> &colors)
+{
+	Color starColor;
+	for (std::vector<Sector::System>::iterator i = sec->m_systems.begin(); i != sec->m_systems.end(); ++i) {
+		// skip the system if it doesn't fall within the sphere we're viewing.
+		if ((m_pos*Sector::SIZE - (*i).FullPosition()).Length() > (m_zoomClamped/FAR_THRESHOLD )*OUTER_RADIUS) continue;
+
+		// if the system belongs to a faction we've chosen to temporarily hide also skip it.
+		m_visibleFactions.insert(i->faction);
+		if (m_hiddenFactions.find(i->faction) != m_hiddenFactions.end()) continue;
+
+		// otherwise add the system's position (origin must be m_pos's *sector* or we get judder)
+		// and faction color to the list to draw
+		starColor = (*i).faction->colour;
+		starColor.a = .75f;
+
+		points.push_back((*i).FullPosition() - origin);
+		colors.push_back(starColor);
 	}
 }
 
@@ -640,6 +877,12 @@ void SectorView::OnSwitchTo() {
 
 	UpdateSystemLabels(m_selectedSystemLabels, m_selected);
 	UpdateSystemLabels(m_targetSystemLabels, m_hyperspaceTarget);
+}
+
+void SectorView::RefreshDetailBoxVisibility()
+{
+	if (m_detailBoxVisible != DETAILBOX_INFO)    m_infoBox->HideAll();    else m_infoBox->ShowAll();
+	if (m_detailBoxVisible != DETAILBOX_FACTION) m_factionBox->HideAll(); else UpdateFactionToggles();
 }
 
 void SectorView::OnKeyPressed(SDL_keysym *keysym)
@@ -656,13 +899,13 @@ void SectorView::OnKeyPressed(SDL_keysym *keysym)
 	// ignore keypresses if they're typing
 	if (m_searchBox->IsFocused()) {
 		// but if they press enter then we want future keys
-		if (keysym->sym == SDLK_RETURN)
+		if (keysym->sym == SDLK_KP_ENTER || keysym->sym == SDLK_RETURN)
 			m_searchBox->Unfocus();
 		return;
 	}
 
 	// '/' focuses the search box
-	if (keysym->sym == SDLK_SLASH) {
+	if (keysym->sym == SDLK_KP_DIVIDE || keysym->sym == SDLK_SLASH) {
 		m_searchBox->SetText("");
 		m_searchBox->GrabFocus();
 		return;
@@ -677,18 +920,16 @@ void SectorView::OnKeyPressed(SDL_keysym *keysym)
 		return;
 	}
 
-	// toggle the info box
+	// cycle through the info box, the faction box, and nothing
 	if (keysym->sym == SDLK_TAB) {
-		m_infoBoxVisible = !m_infoBoxVisible;
-		if (m_infoBoxVisible)
-			m_infoBox->ShowAll();
-		else
-			m_infoBox->HideAll();
+		if (m_detailBoxVisible == DETAILBOX_FACTION) m_detailBoxVisible = DETAILBOX_NONE;
+		else                                         m_detailBoxVisible++;
+		RefreshDetailBoxVisibility();
 		return;
 	}
 
 	// toggle selection mode
-	if (keysym->sym == SDLK_RETURN) {
+		if (keysym->sym == SDLK_KP_ENTER || keysym->sym == SDLK_RETURN) {
 		m_selectionFollowsMovement = !m_selectionFollowsMovement;
 		if (m_selectionFollowsMovement)
 			Pi::cpan->MsgLog()->Message("", Lang::ENABLED_AUTOMATIC_SYSTEM_SELECTION);
@@ -756,10 +997,7 @@ void SectorView::Update()
 	// don't check raw keypresses if the search box is active
 	// XXX ugly hack checking for Lua console here
 	if (!m_searchBox->IsFocused() && !Pi::IsConsoleActive()) {
-		float moveSpeed = 1.0;
-		if (Pi::KeyState(SDLK_LSHIFT)) moveSpeed = 100.0;
-		if (Pi::KeyState(SDLK_RSHIFT)) moveSpeed = 10.0;
-	
+		const float moveSpeed = Pi::GetMoveSpeedShiftModifier();
 		float move = moveSpeed*frameTime;
 		if (Pi::KeyState(SDLK_LEFT) || Pi::KeyState(SDLK_RIGHT))
 			m_posMovingTo += vector3f(Pi::KeyState(SDLK_LEFT) ? -move : move, 0,0) * rot;
@@ -772,8 +1010,8 @@ void SectorView::Update()
 		if (Pi::KeyState(SDLK_MINUS)) m_zoomMovingTo += move;
 		if (m_zoomInButton->IsPressed()) m_zoomMovingTo -= move;
 		if (m_zoomOutButton->IsPressed()) m_zoomMovingTo += move;
-		m_zoomMovingTo = Clamp(m_zoomMovingTo, 0.1f, 5.0f);
-	
+		m_zoomMovingTo = Clamp(m_zoomMovingTo, 0.1f, FAR_MAX);
+
 		if (Pi::KeyState(SDLK_a) || Pi::KeyState(SDLK_d))
 			m_rotZMovingTo += (Pi::KeyState(SDLK_a) ? -0.5f : 0.5f) * moveSpeed;
 		if (Pi::KeyState(SDLK_w) || Pi::KeyState(SDLK_s))
@@ -806,10 +1044,22 @@ void SectorView::Update()
 		if (fabs(travelZ) > fabs(diffZ)) m_rotZ = m_rotZMovingTo;
 		else m_rotZ = m_rotZ + travelZ;
 
+		float prevZoom = m_zoom;
 		float diffZoom = m_zoomMovingTo - m_zoom;
-		float travelZoom = diffZoom * 10.0f*frameTime;
+		float travelZoom = diffZoom * ZOOM_SPEED*frameTime;
 		if (fabs(travelZoom) > fabs(diffZoom)) m_zoom = m_zoomMovingTo;
 		else m_zoom = m_zoom + travelZoom;
+		m_zoomClamped = Clamp(m_zoom, 1.f, FAR_LIMIT);
+
+		// swtich between Info and Faction panels when we zoom over the threshold
+		if (m_zoom <= FAR_THRESHOLD && prevZoom > FAR_THRESHOLD && m_detailBoxVisible == DETAILBOX_FACTION) {
+			m_detailBoxVisible = DETAILBOX_INFO;
+			RefreshDetailBoxVisibility();
+		}
+		if (m_zoom > FAR_THRESHOLD && prevZoom <= FAR_THRESHOLD && m_detailBoxVisible == DETAILBOX_INFO) {
+			m_detailBoxVisible = DETAILBOX_FACTION;
+			RefreshDetailBoxVisibility();
+		}
 	}
 
 	if (m_selectionFollowsMovement) {
@@ -841,64 +1091,82 @@ void SectorView::Update()
 
 	ShrinkCache();
 
-	m_playerHyperspaceRange = Pi::player->CalcStats()->hyperspace_range;
+	m_playerHyperspaceRange = Pi::player->GetStats().hyperspace_range;
 }
 
 void SectorView::ShowAll()
 {
 	View::ShowAll();
-	if (!m_infoBoxVisible)
-		m_infoBox->HideAll();
+	if (m_detailBoxVisible != DETAILBOX_INFO)    m_infoBox->HideAll();
+	if (m_detailBoxVisible != DETAILBOX_FACTION) m_factionBox->HideAll();
 }
 
 void SectorView::MouseButtonDown(int button, int x, int y)
 {
 	if (this == Pi::GetView()) {
-		const float ft = Pi::GetFrameTime();
-		if (Pi::MouseButtonState(SDL_BUTTON_WHEELDOWN)) 
-				m_zoomMovingTo += 10.0*ft;
-		if (Pi::MouseButtonState(SDL_BUTTON_WHEELUP)) 
-				m_zoomMovingTo -= 10.0*ft;
+		if (Pi::MouseButtonState(SDL_BUTTON_WHEELDOWN))
+			m_zoomMovingTo += ZOOM_SPEED * WHEEL_SENSITIVITY * Pi::GetMoveSpeedShiftModifier();
+		else if (Pi::MouseButtonState(SDL_BUTTON_WHEELUP))
+			m_zoomMovingTo -= ZOOM_SPEED * WHEEL_SENSITIVITY * Pi::GetMoveSpeedShiftModifier();
 	}
 }
 
-Sector* SectorView::GetCached(int sectorX, int sectorY, int sectorZ)
+Sector* SectorView::GetCached(const SystemPath& loc)
 {
-	const SystemPath loc(sectorX, sectorY, sectorZ);
-
 	Sector *s = 0;
 
 	std::map<SystemPath,Sector*>::iterator i = m_sectorCache.find(loc);
 	if (i != m_sectorCache.end())
 		return (*i).second;
 
-	s = new Sector(sectorX, sectorY, sectorZ);
+	s = new Sector(loc.sectorX, loc.sectorY, loc.sectorZ);
 	m_sectorCache.insert( std::pair<SystemPath,Sector*>(loc, s) );
+	s->AssignFactions();
 
 	return s;
+}
+
+Sector* SectorView::GetCached(const int sectorX, const int sectorY, const int sectorZ)
+{
+	const SystemPath loc(sectorX, sectorY, sectorZ);
+	return GetCached(loc);
 }
 
 void SectorView::ShrinkCache()
 {
 	// we're going to use these to determine if our sectors are within the range that we'll ever render
-	const int xmin = int(floorf(m_pos.x))-DRAW_RAD;
-	const int xmax = int(ceilf(m_pos.x))+DRAW_RAD;
-	const int ymin = int(floorf(m_pos.y))-DRAW_RAD;
-	const int ymax = int(ceilf(m_pos.y))+DRAW_RAD;
-	const int zmin = int(floorf(m_pos.z))-DRAW_RAD;
-	const int zmax = int(ceilf(m_pos.z))+DRAW_RAD;
+	int drawRadius = ceilf((m_zoomClamped/FAR_THRESHOLD) * 3);
+	if (m_zoomClamped <= FAR_THRESHOLD) drawRadius = DRAW_RAD;
+
+	const int xmin = int(floorf(m_pos.x))-drawRadius;
+	const int xmax = int(floorf(m_pos.x))+drawRadius;
+	const int ymin = int(floorf(m_pos.y))-drawRadius;
+	const int ymax = int(floorf(m_pos.y))+drawRadius;
+	const int zmin = int(floorf(m_pos.z))-drawRadius;
+	const int zmax = int(floorf(m_pos.z))+drawRadius;
 
 	// XXX don't clear the current/selected/target sectors
 
-	std::map<SystemPath,Sector*>::iterator iter = m_sectorCache.begin();
-	while (iter != m_sectorCache.end())	{
-		Sector *s = (*iter).second;
-		//check_point_in_box
-		if (s && !s->WithinBox( xmin, xmax, ymin, ymax, zmin, zmax )) {
-			delete s;
-			m_sectorCache.erase( iter++ ); 
-		} else {
-			iter++;
+	if  (xmin != m_cacheXMin || xmax != m_cacheXMax
+	  || ymin != m_cacheYMin || ymax != m_cacheYMax
+	  || zmin != m_cacheZMin || zmax != m_cacheZMax) {
+		std::map<SystemPath,Sector*>::iterator iter = m_sectorCache.begin();
+		while (iter != m_sectorCache.end())	{
+			Sector *s = (*iter).second;
+			//check_point_in_box
+			if (s && !s->WithinBox( xmin, xmax, ymin, ymax, zmin, zmax )) {
+				delete s;
+				m_sectorCache.erase( iter++ );
+			} else {
+				iter++;
+			}
 		}
+
+		m_cacheXMin = xmin;
+		m_cacheXMax = xmax;
+		m_cacheYMin = ymin;
+		m_cacheYMax = ymax;
+		m_cacheZMin = zmin;
+		m_cacheZMax = zmax;
 	}
 }

@@ -1,3 +1,6 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #ifndef _SERIALIZE_H
 #define _SERIALIZE_H
 
@@ -8,14 +11,14 @@
 class Frame;
 class Body;
 class StarSystem;
-class SBody;
+class SystemBody;
 
 struct SavedGameCorruptException {};
 struct CouldNotOpenFileException {};
 struct CouldNotWriteToFileException {};
 
 namespace Serializer {
-	
+
 	class Writer {
 	public:
 		Writer() {}
@@ -59,8 +62,6 @@ namespace Serializer {
 		float Float ();
 		double Double ();
 		std::string String();
-		char* Cstring() __attribute((malloc));
-		void Cstring2(char *buf, int len);
 		vector3d Vector3d();
 		Quaternionf RdQuaternionf();
 		Reader RdSection(const std::string &section_label_expected) {

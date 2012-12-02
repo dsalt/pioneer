@@ -1,3 +1,6 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #ifndef _SHIP_H
 #define _SHIP_H
 
@@ -6,14 +9,17 @@
 #include "ShipType.h"
 #include "EquipSet.h"
 #include "ShipFlavour.h"
-#include "SystemPath.h"
+#include "galaxy/SystemPath.h"
 #include "BezierCurve.h"
 #include "Serializer.h"
+#include "Camera.h"
 #include <list>
 
 class SpaceStation;
 class HyperspaceCloud;
 class AICommand;
+class ShipController;
+class CargoBody;
 namespace Graphics { class Renderer; }
 
 struct shipstats_t {
@@ -39,20 +45,26 @@ public:
 };
 
 class Ship: public DynamicBody {
+	friend class ShipController; //only controllers need access to AITimeStep
+	friend class PlayerShipController;
 public:
 	enum Animation { // <enum scope='Ship' name=ShipAnimation prefix=ANIM_>
 		ANIM_WHEEL_STATE
 	};
 
 	OBJDEF(Ship, DynamicBody, SHIP);
-	Ship(ShipType::Type shipType);
-	Ship() {}
+	Ship(ShipType::Id shipId);
+	Ship() {} //default constructor used before Load
 	virtual ~Ship();
+	void SetController(ShipController *c); //deletes existing
+	ShipController *GetController() const { return m_controller; }
+	virtual bool IsPlayerShip() const { return false; } //XXX to be replaced with an owner check
+
 	virtual void SetDockedWith(SpaceStation *, int port);
 	/** Use GetDockedWith() to determine if docked */
 	SpaceStation *GetDockedWith() const { return m_dockedWith; }
 	int GetDockingPort() const { return m_dockedWithPort; }
-	virtual void Render(Graphics::Renderer *r, const vector3d &viewCoords, const matrix4x4d &viewTransform);
+	virtual void Render(Graphics::Renderer *r, const Camera *camera, const vector3d &viewCoords, const matrix4x4d &viewTransform);
 
 	void SetThrusterState(int axis, double level) {
 		if (m_thrusterFuel <= 0.f) level = 0.0;
@@ -71,9 +83,14 @@ public:
 	double GetAccelUp() const { return GetShipType().linThrust[ShipType::THRUSTER_UP] / GetMass(); }
 	double GetAccelMin() const;
 
-	void SetGunState(int idx, int state);
 	const ShipType &GetShipType() const;
-	const shipstats_t *CalcStats();
+	void UpdateEquipStats();
+	void UpdateFuelStats();
+	void UpdateStats();
+	const shipstats_t &GetStats() const { return m_stats; }
+
+	void Explode();
+	void SetGunState(int idx, int state);
 	void UpdateMass();
 	virtual bool SetWheelState(bool down); // returns success of state change, NOT state itself
 	void Blastoff();
@@ -86,6 +103,9 @@ public:
 	virtual bool OnCollision(Object *o, Uint32 flags, double relVel);
 	virtual bool OnDamage(Object *attacker, float kgDamage);
 
+	void SetManualRotationState(bool rotationState) { m_manualRotation = rotationState; }
+	bool GetManualRotationState() { return m_manualRotation; }
+
 	enum FlightState { // <enum scope='Ship' name=ShipFlightState>
 		FLYING,     // open flight (includes autopilot)
 		DOCKING,    // in docking animation
@@ -97,7 +117,9 @@ public:
 	FlightState GetFlightState() const { return m_flightState; }
 	void SetFlightState(FlightState s);
 	float GetWheelState() const { return m_wheelState; }
-	bool Jettison(Equip::Type t);
+	bool SpawnCargo(CargoBody * c_body) const;
+
+	virtual bool IsInSpace() const { return (m_flightState != HYPERSPACE); }
 
 	void SetHyperspaceDest(const SystemPath &dest) { m_hyperspace.dest = dest; }
 	const SystemPath &GetHyperspaceDest() const { return m_hyperspace.dest; }
@@ -126,10 +148,10 @@ public:
 	}
 	bool CanHyperspaceTo(const SystemPath &dest) { return (CheckHyperspaceTo(dest) == HYPERJUMP_OK); }
 
-	Ship::HyperjumpStatus StartHyperspaceCountdown(const SystemPath &dest);
+	virtual Ship::HyperjumpStatus StartHyperspaceCountdown(const SystemPath &dest);
 	float GetHyperspaceCountdown() const { return m_hyperspace.countdown; }
 	bool IsHyperspaceActive() const { return (m_hyperspace.countdown > 0.0); }
-	void ResetHyperspaceCountdown();
+	virtual void ResetHyperspaceCountdown();
 
 	Equip::Type GetHyperdriveFuelType() const;
 	// 0 to 1.0 is alive, > 1.0 = death
@@ -176,16 +198,15 @@ public:
 
 	void AIKamikaze(Body *target);
 	void AIKill(Ship *target);
-	//void AIJourney(SBodyPath &dest);
-	void AIDock(SpaceStation *target);
-	void AIFlyTo(Body *target);
-	void AIOrbit(Body *target, double alt);
+	//void AIJourney(SystemBodyPath &dest);
+	void AIDock(SpaceStation *target, float hungriness = 0.0f);
+	void AIFlyTo(Body *target, float hungriness = 0.0f);
+	void AIOrbit(Body *target, double alt, float hungriness = 0.0f);
 	void AIHoldPosition();
 
 	void AIBodyDeleted(const Body* const body) {};		// todo: signals
 
 	SerializableEquipSet m_equipment;			// shouldn't be public?...
-	shipstats_t m_stats;
 
 	virtual void PostLoadFixup(Space *space);
 
@@ -212,19 +233,28 @@ public:
 	float GetFuel() const {	return m_thrusterFuel;	}
 	//0.0 - 1.0
 	void SetFuel(const float f) {	m_thrusterFuel = Clamp(f, 0.f, 1.f); }
-	
+
+	double GetFuelUseRate(double effectiveExhaustVelocity);
+	double GetEffectiveExhaustVelocity();
+	double GetVelocityReachedWithFuelUsed(float fuelUsed);
+
 	void EnterSystem();
 
 	HyperspaceCloud *GetHyperspaceCloud() const { return m_hyperspaceCloud; }
 
 	sigc::signal<void> onDock;				// JJ: check what these are for
 	sigc::signal<void> onUndock;
+
+	// mutable because asking to know when state changes is not the same as
+	// actually changing state
+	mutable sigc::signal<void> onFlavourChanged;
+
 protected:
 	virtual void Save(Serializer::Writer &wr, Space *space);
 	virtual void Load(Serializer::Reader &rd, Space *space);
 	void RenderLaserfire();
 
-	bool AITimeStep(float timeStep);		// returns true if complete
+	bool AITimeStep(float timeStep); // Called by controller. Returns true if complete
 
 	virtual void SetAlertState(AlertState as) { m_alertState = as; }
 
@@ -239,8 +269,11 @@ protected:
 	float m_gunTemperature[ShipType::GUNMOUNT_MAX];
 	float m_ecmRecharge;
 
+	ShipController *m_controller;
+
 private:
 	float GetECMRechargeTime();
+	void DoThrusterSounds() const;
 	void FireWeapon(int num);
 	void Init();
 	bool IsFiringLasers();
@@ -250,8 +283,11 @@ private:
 	void OnEquipmentChange(Equip::Type e);
 	void EnterHyperspace();
 
+	shipstats_t m_stats;
+
 	FlightState m_flightState;
 	bool m_testLanded;
+	bool m_manualRotation;
 	float m_launchLockTimeout;
 	float m_wheelState;
 	int m_wheelTransition;

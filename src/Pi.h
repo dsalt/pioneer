@@ -1,13 +1,14 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #ifndef _PI_H
 #define _PI_H
 
 #include "utils.h"
 #include "gui/Gui.h"
-#include "View.h"
 #include "mtrand.h"
 #include "gameconsts.h"
 #include "GameConfig.h"
-#include "LuaEventQueue.h"
 #include "LuaSerializer.h"
 #include "LuaTimer.h"
 #include "CargoBody.h"
@@ -17,9 +18,11 @@
 #include <vector>
 
 class Player;
+class View;
 class SectorView;
 class SystemView;
 class WorldView;
+class DeathView;
 class SystemInfoView;
 class ShipCpanel;
 class StarSystem;
@@ -33,6 +36,7 @@ class LuaConsole;
 class LuaNameGen;
 namespace Graphics { class Renderer; }
 namespace Sound { class MusicPlayer; }
+namespace UI { class Context; }
 
 #if WITH_OBJECTVIEWER
 class ObjectViewerView;
@@ -56,8 +60,6 @@ class Game;
 class Pi {
 public:
 	static void Init();
-	static void RedirectStdio();
-	static void LoadWindowIcon();
 	static void InitGame();
 	static void StarportStart(Uint32 starport);
 	static void StartGame();
@@ -65,9 +67,9 @@ public:
 	static void Start();
 	static void MainLoop();
 	static void TombStoneLoop();
-	static void HandleMenuKey(int n);
 	static void OnChangeDetailLevel();
 	static void ToggleLuaConsole();
+	static void ToggleManualRotation();
 	static void Quit() __attribute((noreturn));
 	static float GetFrameTime() { return frameTime; }
 	static float GetGameTickAlpha() { return gameTickAlpha; }
@@ -84,15 +86,25 @@ public:
 	static void SetJoystickEnabled(bool state) { joystickEnabled = state; }
     static void SetMouseYInvert(bool state) { mouseYInvert = state; }
     static bool IsMouseYInvert() { return mouseYInvert; }
+	static bool IsNavTunnelDisplayed() { return navTunnelDisplayed; }
+	static void SetNavTunnelDisplayed(bool state) { navTunnelDisplayed = state; }
 	static int MouseButtonState(int button) { return mouseButton[button]; }
+	/// Get the default speed modifier to apply to movement (scrolling, zooming...), depending on the "shift" keys.
+	/// This is a default value only, centralized here to promote uniform user expericience.
+	static float GetMoveSpeedShiftModifier();
 	static void GetMouseMotion(int motion[2]) {
 		memcpy(motion, mouseMotion, sizeof(int)*2);
 	}
 	static void SetMouseGrab(bool on);
 	static void BoinkNoise();
-	static float CalcHyperspaceRange(int hyperclass, int total_mass_in_tonnes);
+	static float CalcHyperspaceRangeMax(int hyperclass, int total_mass_in_tonnes);
+	static float CalcHyperspaceRange(int hyperclass, float total_mass_in_tonnes, int fuel);
+	static float CalcHyperspaceDuration(int hyperclass, int total_mass_in_tonnes, float dist);
+	static float CalcHyperspaceFuelOut(int hyperclass, float dist, float hyperspace_range_max);
 	static void Message(const std::string &message, const std::string &from = "", enum MsgLevel level = MSG_NORMAL);
 	static std::string GetSaveDir();
+
+	static const char SAVE_DIR_NAME[];
 
 	static sigc::signal<void, SDL_keysym*> onKeyPress;
 	static sigc::signal<void, SDL_keysym*> onKeyRelease;
@@ -103,35 +115,12 @@ public:
 	static sigc::signal<void> onPlayerChangeEquipment;
 	static sigc::signal<void, const SpaceStation*> onDockingClearanceExpired;
 
-	static LuaManager *luaManager;
-
 	static LuaSerializer *luaSerializer;
 	static LuaTimer *luaTimer;
 
-	static LuaEventQueue<> *luaOnGameStart;
-	static LuaEventQueue<> *luaOnGameEnd;
-	static LuaEventQueue<Ship> *luaOnEnterSystem;
-	static LuaEventQueue<Ship> *luaOnLeaveSystem;
-	static LuaEventQueue<Body> *luaOnFrameChanged;
-	static LuaEventQueue<Ship,Body> *luaOnShipDestroyed;
-	static LuaEventQueue<Ship,Body> *luaOnShipHit;
-	static LuaEventQueue<Ship,Body> *luaOnShipCollided;
-	static LuaEventQueue<Ship,SpaceStation> *luaOnShipDocked;
-	static LuaEventQueue<Ship,SpaceStation> *luaOnShipUndocked;
-	static LuaEventQueue<Ship,Body> *luaOnShipLanded;
-	static LuaEventQueue<Ship,Body> *luaOnShipTakeOff;
-	static LuaEventQueue<Ship,const char *> *luaOnShipAlertChanged;
-	static LuaEventQueue<Ship,CargoBody> *luaOnJettison;
-	static LuaEventQueue<Body,const char *> *luaOnCargoUnload;
-	static LuaEventQueue<Ship,const char *> *luaOnAICompleted;
-	static LuaEventQueue<SpaceStation> *luaOnCreateBB;
-	static LuaEventQueue<SpaceStation> *luaOnUpdateBB;
-	static LuaEventQueue<> *luaOnSongFinished;
-	static LuaEventQueue<Ship> *luaOnShipFlavourChanged;
-	static LuaEventQueue<Ship,const char *> *luaOnShipEquipmentChanged;
-	static LuaEventQueue<Ship,const char *> *luaOnShipFuelChanged;
-
 	static LuaNameGen *luaNameGen;
+
+	static RefCountedPtr<UI::Context> ui;
 
 	static MTRand rng;
 	static int statSceneTris;
@@ -149,6 +138,7 @@ public:
 	static SystemInfoView *systemInfoView;
 	static SystemView *systemView;
 	static WorldView *worldView;
+	static DeathView *deathView;
 	static SpaceStationView *spaceStationView;
 	static InfoView *infoView;
 	static LuaConsole *luaConsole;
@@ -186,7 +176,6 @@ private:
 	static float frameTime;
 	static int scrWidth, scrHeight;
 	static float scrAspect;
-	static SDL_Surface *scrSurface;
 	static char keyState[SDLK_LAST];
 	static int keyModState;
 	static char mouseButton[6];
@@ -204,6 +193,10 @@ private:
 	};
 	static std::vector<JoystickState> joysticks;
 	static Sound::MusicPlayer musicPlayer;
+
+	static bool navTunnelDisplayed;
+
+	static Gui::Fixed *menu;
 };
 
 #endif /* _PI_H */

@@ -1,11 +1,14 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "LuaObject.h"
 #include "LuaSystemPath.h"
 #include "LuaUtils.h"
 #include "LuaStarSystem.h"
-#include "LuaSBody.h"
-#include "SystemPath.h"
-#include "StarSystem.h"
-#include "Sector.h"
+#include "LuaSystemBody.h"
+#include "galaxy/SystemPath.h"
+#include "galaxy/StarSystem.h"
+#include "galaxy/Sector.h"
 
 /*
  * Class: SystemPath
@@ -92,7 +95,7 @@ static int l_sbodypath_new(lua_State *l)
 /*
  * Method: IsSameSystem
  *
- * Determine if two <SystemPath> objects point to objects in the same system. 
+ * Determine if two <SystemPath> objects point to objects in the same system.
  *
  * > is_same = path:IsSameSystem(otherpath)
  *
@@ -114,8 +117,8 @@ static int l_sbodypath_new(lua_State *l)
  */
 static int l_sbodypath_is_same_system(lua_State *l)
 {
-	SystemPath *a = LuaSystemPath::GetFromLua(1);
-	SystemPath *b = LuaSystemPath::GetFromLua(2);
+	SystemPath *a = LuaSystemPath::CheckFromLua(1);
+	SystemPath *b = LuaSystemPath::CheckFromLua(2);
 
 	lua_pushboolean(l, a->IsSameSystem(b));
 	return 1;
@@ -146,8 +149,8 @@ static int l_sbodypath_is_same_system(lua_State *l)
  */
 static int l_sbodypath_is_same_sector(lua_State *l)
 {
-	SystemPath *a = LuaSystemPath::GetFromLua(1);
-	SystemPath *b = LuaSystemPath::GetFromLua(2);
+	SystemPath *a = LuaSystemPath::CheckFromLua(1);
+	SystemPath *b = LuaSystemPath::CheckFromLua(2);
 
 	lua_pushboolean(l, a->IsSameSector(b));
 	return 1;
@@ -174,7 +177,7 @@ static int l_sbodypath_is_same_sector(lua_State *l)
  */
 static int l_sbodypath_system_only(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	LuaSystemPath::PushToLuaGC(new SystemPath(path->SystemOnly()));
 	return 1;
 }
@@ -200,7 +203,7 @@ static int l_sbodypath_system_only(lua_State *l)
  */
 static int l_sbodypath_sector_only(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	LuaSystemPath::PushToLuaGC(new SystemPath(path->SectorOnly()));
 	return 1;
 }
@@ -232,17 +235,17 @@ static int l_sbodypath_distance_to(lua_State *l)
 {
 	LUA_DEBUG_START(l);
 
-	const SystemPath *loc1 = LuaSystemPath::GetFromLua(1);
+	const SystemPath *loc1 = LuaSystemPath::CheckFromLua(1);
 
-	const SystemPath *loc2 = LuaSystemPath::CheckFromLua(2);
+	const SystemPath *loc2 = LuaSystemPath::GetFromLua(2);
 	if (!loc2) {
-		StarSystem *s2 = LuaStarSystem::GetFromLua(2);
+		StarSystem *s2 = LuaStarSystem::CheckFromLua(2);
 		loc2 = &(s2->GetPath());
 	}
 
 	Sector sec1(loc1->sectorX, loc1->sectorY, loc1->sectorZ);
 	Sector sec2(loc2->sectorX, loc2->sectorY, loc1->sectorZ);
-	
+
 	double dist = Sector::DistanceBetween(&sec1, loc1->systemIndex, &sec2, loc2->systemIndex);
 
 	lua_pushnumber(l, dist);
@@ -272,7 +275,7 @@ static int l_sbodypath_distance_to(lua_State *l)
  */
 static int l_sbodypath_get_star_system(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	RefCountedPtr<StarSystem> s = StarSystem::GetCached(path);
 	// LuaStarSystem shares ownership of the StarSystem,
 	// because LuaAcquirer<LuaStarSystem> uses IncRefCount and DecRefCount
@@ -301,7 +304,7 @@ static int l_sbodypath_get_star_system(lua_State *l)
  */
 static int l_sbodypath_get_system_body(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 
 	if (path->IsSectorPath()) {
 		luaL_error(l, "Path <%d,%d,%d> does not name a system or body", path->sectorX, path->sectorY, path->sectorZ);
@@ -318,8 +321,8 @@ static int l_sbodypath_get_system_body(lua_State *l)
 	// (note: this may change if it becomes possible to remove systems during the game)
 	assert(size_t(path->bodyIndex) < sys->m_bodies.size());
 
-	SBody *sbody = sys->GetBodyByPath(path);
-	LuaSBody::PushToLua(sbody);
+	SystemBody *sbody = sys->GetBodyByPath(path);
+	LuaSystemBody::PushToLua(sbody);
 	return 1;
 }
 
@@ -339,7 +342,7 @@ static int l_sbodypath_get_system_body(lua_State *l)
  */
 static int l_sbodypath_attr_sector_x(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	lua_pushinteger(l, path->sectorX);
 	return 1;
 }
@@ -360,7 +363,7 @@ static int l_sbodypath_attr_sector_x(lua_State *l)
 
 static int l_sbodypath_attr_sector_y(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	lua_pushinteger(l, path->sectorY);
 	return 1;
 }
@@ -381,7 +384,7 @@ static int l_sbodypath_attr_sector_y(lua_State *l)
 
 static int l_sbodypath_attr_sector_z(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	lua_pushinteger(l, path->sectorZ);
 	return 1;
 }
@@ -402,7 +405,7 @@ static int l_sbodypath_attr_sector_z(lua_State *l)
  */
 static int l_sbodypath_attr_system_index(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	if (!path->IsSectorPath())
 		lua_pushinteger(l, path->systemIndex);
 	else
@@ -426,7 +429,7 @@ static int l_sbodypath_attr_system_index(lua_State *l)
  */
 static int l_sbodypath_attr_body_index(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	if (path->IsBodyPath())
 		lua_pushinteger(l, path->bodyIndex);
 	else
@@ -436,8 +439,8 @@ static int l_sbodypath_attr_body_index(lua_State *l)
 
 static int l_sbodypath_meta_eq(lua_State *l)
 {
-	SystemPath *a = LuaSystemPath::GetFromLua(1);
-	SystemPath *b = LuaSystemPath::GetFromLua(2);
+	SystemPath *a = LuaSystemPath::CheckFromLua(1);
+	SystemPath *b = LuaSystemPath::CheckFromLua(2);
 
 	lua_pushboolean(l, *a == *b);
 	return 1;
@@ -445,7 +448,7 @@ static int l_sbodypath_meta_eq(lua_State *l)
 
 static int l_sbodypath_meta_tostring(lua_State *l)
 {
-	SystemPath *path = LuaSystemPath::GetFromLua(1);
+	SystemPath *path = LuaSystemPath::CheckFromLua(1);
 	if (path->IsSectorPath()) {
 		lua_pushfstring(l, "<%d,%d,%d>", path->sectorX, path->sectorY, path->sectorZ);
 	} else if (path->IsSystemPath()) {
@@ -465,7 +468,7 @@ template <> const char *LuaObject<LuaUncopyable<SystemPath> >::s_type = "SystemP
 
 template <> void LuaObject<LuaUncopyable<SystemPath> >::RegisterClass()
 {
-	static const luaL_reg l_methods[] = {
+	static const luaL_Reg l_methods[] = {
 		{ "New", l_sbodypath_new },
 
 		{ "IsSameSystem", l_sbodypath_is_same_system },
@@ -482,7 +485,7 @@ template <> void LuaObject<LuaUncopyable<SystemPath> >::RegisterClass()
 		{ 0, 0 }
 	};
 
-	static const luaL_reg l_attrs[] = {
+	static const luaL_Reg l_attrs[] = {
 		{ "sectorX",     l_sbodypath_attr_sector_x     },
 		{ "sectorY",     l_sbodypath_attr_sector_y     },
 		{ "sectorZ",     l_sbodypath_attr_sector_z     },
@@ -491,7 +494,7 @@ template <> void LuaObject<LuaUncopyable<SystemPath> >::RegisterClass()
 		{ 0, 0 }
 	};
 
-	static const luaL_reg l_meta[] = {
+	static const luaL_Reg l_meta[] = {
 		{ "__eq",  l_sbodypath_meta_eq },
 		{ "__tostring", l_sbodypath_meta_tostring },
 		{ 0, 0 }

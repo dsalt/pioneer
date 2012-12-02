@@ -1,22 +1,28 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #ifndef _WORLDVIEW_H
 #define _WORLDVIEW_H
 
 #include "libs.h"
 #include "gui/Gui.h"
+#include "gui/GuiWidget.h"
 #include "View.h"
 #include "Serializer.h"
 #include "Background.h"
 #include "EquipType.h"
-#include "Camera.h"
+#include "WorldViewCamera.h"
 
 class Body;
 class Frame;
 class LabelSet;
 class Ship;
+class NavTunnelWidget;
 namespace Gui { class TexturedQuad; }
 
 class WorldView: public View {
 public:
+	friend class NavTunnelWidget;
 	WorldView();
 	WorldView(Serializer::Reader &reader);
 	virtual ~WorldView();
@@ -24,19 +30,16 @@ public:
 	virtual void Update();
 	virtual void Draw3D();
 	virtual void Draw();
-	virtual void OnSwitchTo();
 	static const double PICK_OBJECT_RECT_SIZE;
-	bool GetShowLabels() { return m_labelsOn; }
-	void DrawBgStars();
-	vector3d GetExternalViewTranslation();
-	matrix4x4d GetExternalViewRotation();
-	vector3d GetSiderealViewTranslation();
-	matrix4x4d GetSiderealViewRotation();
 	virtual void Save(Serializer::Writer &wr);
-	enum CamType { CAM_FRONT, CAM_REAR, CAM_EXTERNAL, CAM_SIDEREAL };
+	enum CamType {
+		CAM_INTERNAL,
+		CAM_EXTERNAL,
+		CAM_SIDEREAL
+	};
 	void SetCamType(enum CamType);
-	enum CamType GetCamType() const;
-	int GetNumLights() const { return m_numLights; }
+	enum CamType GetCamType() const { return m_camType; }
+	WorldViewCamera *GetActiveCamera() const { return m_activeCamera; }
 	void ToggleTargetActions();
 	void ShowTargetActions();
 	void HideTargetActions();
@@ -45,18 +48,17 @@ public:
 
 	sigc::signal<void> onChangeCamType;
 
-	double m_externalViewRotX, m_externalViewRotY;
-	double m_externalViewDist;
-	
-	matrix4x4d m_siderealViewOrient;
-	double m_siderealViewDist;
-
+protected:
+	virtual void OnSwitchTo();
 private:
 	void InitObject();
 
 	void RefreshHyperspaceButton();
 	void RefreshButtonStateAndVisibility();
 	void UpdateCommsOptions();
+
+	void ChangeInternalCameraMode(InternalCamera::Mode m);
+	void UpdateCameraName();
 
 	enum IndicatorSide {
 		INDICATOR_HIDDEN,
@@ -68,28 +70,24 @@ private:
 	};
 
 	struct Indicator {
-		float pos[2];
+		vector2f pos;
+		vector2f realpos;
 		IndicatorSide side;
 		Gui::Label *label;
-		Indicator() {
-			pos[0] = pos[1] = 0;
-			side = INDICATOR_HIDDEN;
-			label = 0;
-		}
+		Indicator(): pos(0.0f, 0.0f), realpos(0.0f, 0.0f), side(INDICATOR_HIDDEN), label(0) {}
 	};
 
-	void UpdateSiderealView();
-	
 	void UpdateProjectedObjects();
 	void UpdateIndicator(Indicator &indicator, const vector3d &direction);
 	void HideIndicator(Indicator &indicator);
 	void SeparateLabels(Gui::Label *a, Gui::Label *b);
 
+	void OnToggleLabels();
+
 	void DrawCrosshair(float px, float py, float sz, const Color &c);
 	void DrawCombatTargetIndicator(const Indicator &target, const Indicator &lead, const Color &c);
 	void DrawTargetSquare(const Indicator &marker, const Color &c);
 	void DrawVelocityIndicator(const Indicator &marker, const Color &c);
-	void DrawCircleIndicator(const Indicator &marker, const Color &c);
 	void DrawImageIndicator(const Indicator &marker, Gui::TexturedQuad *quad, const Color &c);
 	void DrawEdgeMarker(const Indicator &marker, const Color &c);
 
@@ -98,9 +96,13 @@ private:
 	void OnClickCommsNavOption(Body *target);
 	void BuildCommsNavOptions();
 
+	void HideLowThrustPowerOptions();
+	void ShowLowThrustPowerOptions();
+	void OnClickLowThrustPower();
+	void OnSelectLowThrustPower(float power);
+
 	void OnClickHyperspace();
 	void OnChangeWheelsState(Gui::MultiStateImageButton *b);
-	void OnChangeLabelsState(Gui::MultiStateImageButton *b);
 	void OnChangeFlightState(Gui::MultiStateImageButton *b);
 	void OnHyperspaceTargetChanged();
 	void OnPlayerDockOrUndock();
@@ -110,21 +112,24 @@ private:
 	Body* PickBody(const double screenX, const double screenY) const;
 	void MouseButtonDown(int button, int x, int y);
 
-	matrix4x4d m_prevShipOrient;
-	
+	NavTunnelWidget *m_navTunnel;
+
 	Gui::ImageButton *m_hyperspaceButton;
 
+	Gui::Label *m_showCameraName;
 	Gui::Fixed *m_commsOptions;
 	Gui::VBox *m_commsNavOptions;
 	Gui::HBox *m_commsNavOptionsContainer;
+	Gui::Fixed *m_lowThrustPowerOptions;
 	Gui::Label *m_flightStatus, *m_debugText;
 	Gui::ImageButton *m_launchButton;
 	Gui::MultiStateImageButton *m_wheelsButton;
 	Gui::MultiStateImageButton *m_flightControlButton;
 	bool m_labelsOn;
 	enum CamType m_camType;
-	int m_numLights;
 	Uint32 m_showTargetActionsTimeout;
+	Uint32 m_showLowThrustPowerTimeout;
+	Uint32 m_showCameraNameTimeout;
 
 #if WITH_DEVKEYS
 	Gui::Label *m_debugInfo;
@@ -143,8 +148,10 @@ private:
 	Gui::LabelSet *m_bodyLabels;
 	std::map<Body*,vector3d> m_projectedPos;
 
-	Camera *m_frontCamera, *m_rearCamera, *m_externalCamera, *m_siderealCamera;
-	Camera *m_activeCamera;
+	InternalCamera *m_internalCamera;
+	ExternalCamera *m_externalCamera;
+	SiderealCamera *m_siderealCamera;
+	WorldViewCamera *m_activeCamera; //one of the above
 
 	Indicator m_velIndicator;
 	Indicator m_navVelIndicator;
@@ -155,6 +162,17 @@ private:
 
 	ScopedPtr<Gui::TexturedQuad> m_indicatorMousedir;
 	vector2f m_indicatorMousedirSize;
+};
+
+class NavTunnelWidget: public Gui::Widget {
+public:
+	NavTunnelWidget(WorldView *worldView);
+	virtual void Draw();
+	virtual void GetSizeRequested(float size[2]);
+	void DrawTargetGuideSquare(const vector2f &pos, const float size, const Color &c);
+
+private:
+	WorldView *m_worldView;
 };
 
 #endif /* _WORLDVIEW_H */

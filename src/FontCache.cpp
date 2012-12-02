@@ -1,37 +1,40 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "FontCache.h"
-#include "FontConfig.h"
-#include "TextureFont.h"
-#include "VectorFont.h"
+#include "text/TextureFont.h"
+#include "text/VectorFont.h"
 #include "FileSystem.h"
+#include "gui/GuiScreen.h"
 
-static FontConfig font_config(const std::string &path) {
-	RefCountedPtr<FileSystem::FileData> config_data = FileSystem::gameDataFiles.ReadFile(path);
-	FontConfig fc;
-	fc.Load(*config_data);
-	config_data.Reset();
-	return fc;
-}
-
-RefCountedPtr<TextureFont> FontCache::GetTextureFont(const std::string &name)
+RefCountedPtr<Text::TextureFont> FontCache::GetTextureFont(const std::string &name)
 {
-	std::map< std::string,RefCountedPtr<TextureFont> >::iterator i = m_textureFonts.find(name);
+	std::map< std::string,RefCountedPtr<Text::TextureFont> >::iterator i = m_textureFonts.find(name);
 	if (i != m_textureFonts.end())
 		return (*i).second;
 
-	RefCountedPtr<TextureFont> font(new TextureFont(font_config("fonts/" + name + ".ini")));
-	m_textureFonts.insert(std::pair< std::string,RefCountedPtr<TextureFont> >(name, font));
+	float scale[2];
+	Gui::Screen::GetCoords2Pixels(scale);
+
+	const Text::FontDescriptor desc =
+		Text::FontDescriptor::Load(FileSystem::gameDataFiles, "fonts/" + name + ".ini", scale[0], scale[1]);
+
+	RefCountedPtr<Text::TextureFont> font(new Text::TextureFont(desc, Gui::Screen::GetRenderer()));
+	m_textureFonts.insert(std::pair< std::string,RefCountedPtr<Text::TextureFont> >(name, font));
 
 	return font;
 }
 
-RefCountedPtr<VectorFont> FontCache::GetVectorFont(const std::string &name)
+RefCountedPtr<Text::VectorFont> FontCache::GetVectorFont(const std::string &name)
 {
-	std::map< std::string, RefCountedPtr<VectorFont> >::iterator i = m_vectorFonts.find(name);
+	std::map< std::string, RefCountedPtr<Text::VectorFont> >::iterator i = m_vectorFonts.find(name);
 	if (i != m_vectorFonts.end())
 		return (*i).second;
 
-	RefCountedPtr<VectorFont> font(new VectorFont(font_config("fonts/" + name + ".ini")));
-	m_vectorFonts.insert(std::pair< std::string,RefCountedPtr<VectorFont> >(name, font));
+	const Text::FontDescriptor desc =
+		Text::FontDescriptor::Load(FileSystem::gameDataFiles, "fonts/" + name + ".ini");
+	RefCountedPtr<Text::VectorFont> font(new Text::VectorFont(desc));
+	m_vectorFonts.insert(std::pair< std::string,RefCountedPtr<Text::VectorFont> >(name, font));
 
 	return font;
 }

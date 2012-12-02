@@ -1,4 +1,7 @@
-#include "StarSystem.h"
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
+#include "galaxy/StarSystem.h"
 #include "Serializer.h"
 #include "Pi.h"
 #include "Frame.h"
@@ -110,7 +113,7 @@ Reader::Reader(): m_data(""), m_pos(0) {
 Reader::Reader(const std::string &data):
 	m_data(data),
 	m_pos(0) {
-	
+
 }
 Reader::Reader(FILE *fptr): m_pos(0) {
 	m_data = "";
@@ -199,50 +202,6 @@ std::string Reader::String()
 	}
 	Byte();// discard null terminator
 	return buf;
-}
-
-/* *Memory leaks included */
-char* Reader::Cstring()
-{
-	char* buf;
-	int i, size;
-
-	/* Size is in first byte */
-	size = Int32();
-
-	/* A saved null string */
-	if (size == 0) {
-		return NULL;
-	}
-
-	buf = static_cast<char*>(malloc (sizeof(char)*size));
-
-	for (i=0; i<size; i++) {
-		buf[i] = Byte();
-	}
-
-	return buf;
-}
-
-void Reader::Cstring2(char *buf, int len)
-{
-	int i;
-	int size;
-
-	/* Size is in first byte */
-	size = Int32();
-
-	/* A saved null string */
-	if (size == 0) {
-		buf[0] = '\0';
-		return;
-	}
-
-	assert (size < len);
-
-	for (i=0; i<size; i++) {
-		buf[i] = Byte();
-	}
 }
 
 vector3d Reader::Vector3d()

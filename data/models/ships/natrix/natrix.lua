@@ -1,3 +1,6 @@
+-- Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+-- Licensed under the terms of CC-BY-SA 3.0. See licenses/CC-BY-SA-3.0.txt
+
 define_model('gear', {
 	info = {
 		scale = 1.0,
@@ -67,8 +70,8 @@ define_model('natrix', {
 		--or landing gear is down
 		navigation_lights(
 			{v(4.355, 0.763, -0.018), v(-4.467, 0.763, -0.018), },
-			{v(4.030, 0.028, 8.898), v(3.300, 0.028, -8.869), },
-			{v(-4.030, 0.028, 8.898), v(-3.300, 0.028, -8.869), }
+			{v(-4.030, 0.028, 8.898), v(-3.300, 0.028, -8.869), },
+			{v(4.030, 0.028, 8.898), v(3.300, 0.028, -8.869), }
 		)
 	end
 })

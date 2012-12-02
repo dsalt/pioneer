@@ -1,17 +1,20 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "libs.h"
 #include "Lang.h"
 #include "FileSystem.h"
 #include "StringRange.h"
 #include "utils.h"
-#include "TextSupport.h"
+#include "text/TextSupport.h"
 #include <map>
 #include <set>
 
 namespace Lang {
 
-// XXX we're allocating half a KB for each translatable string
+// XXX we're allocating a KB for each translatable string
 // that's... not very nice (though I guess it "doesn't matter" with virtual memory and multi-GB of RAM)
-static const int STRING_RECORD_SIZE = 512;
+static const int STRING_RECORD_SIZE = 1024;
 #define DECLARE_STRING(x) char x[STRING_RECORD_SIZE];
 #include "LangStrings.inc.h"
 #undef DECLARE_STRING
@@ -64,7 +67,7 @@ static int valid_utf8(StringRange data)
 	int line = 1;
 	while (c != data.end) {
 		Uint32 chr;
-		int n = conv_mb_to_wc(&chr, c);
+		int n = Text::utf8_decode_char(&chr, c);
 		if (!n) return line;
 		if (chr == '\n') ++line;
 		c += n;
@@ -107,6 +110,7 @@ StringFileParser::StringFileParser(const std::string &filename, StringRange rang
 	m_filename(filename), m_data(range), m_lineNo(0), m_tokenLine(-1), m_textLine(-1)
 {
 	assert(m_data.begin && m_data.end);
+	m_data = m_data.StripUTF8BOM();
 	SkipBlankLines();
 	Next();
 }
@@ -203,7 +207,7 @@ static std::vector<std::string> EnumAvailableLanguages()
 	for (FileSystem::FileEnumerator files(FileSystem::gameDataFiles, "lang"); !files.Finished(); files.Next()) {
 		assert(files.Current().IsFile());
 		const std::string &path = files.Current().GetPath();
-		if ((path.size() > 4) && (path.substr(path.size() - 4) == ".txt")) {
+		if (ends_with(path, ".txt")) {
 			const std::string name = files.Current().GetName();
 			languages.push_back(name.substr(0, name.size() - 4));
 		}
@@ -250,6 +254,8 @@ bool LoadStrings(const std::string &lang)
 		if (it != s_token_map.end()) {
 			seen.insert(token);
 			const std::string &text = parser.GetAdjustedText();
+			if (text.size() >= size_t(STRING_RECORD_SIZE))
+				fprintf(stderr, "WARNING: language text is too long -- it will be cut off!\n");
 			// XXX const_cast is ugly, but see note for declaration of tokens map
 			char *record = const_cast<char*>(it->second);
 			copy_string(record, text.c_str(), text.size(), STRING_RECORD_SIZE);
@@ -293,6 +299,8 @@ bool LoadStrings(const std::string &lang)
 		if (it != s_token_map.end()) {
 			seen.insert(token);
 			const std::string &text = parser.GetAdjustedText();
+			if (text.size() >= size_t(STRING_RECORD_SIZE))
+				fprintf(stderr, "WARNING: language text is too long -- it will be cut off!\n");
 			// XXX const_cast is ugly, but see note for declaration of tokens map
 			char *record = const_cast<char*>(it->second);
 			copy_string(record, text.c_str(), text.size(), STRING_RECORD_SIZE);

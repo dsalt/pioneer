@@ -1,3 +1,6 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #ifndef _STRINGRANGE_H
 #define _STRINGRANGE_H
 
@@ -59,6 +62,7 @@ struct StringRange
 
 	const char *FindNextLine() const;
 
+	StringRange StripUTF8BOM() const;
 	StringRange StripSpace() const;
 
 	StringRange ReadLine();
@@ -142,6 +146,14 @@ inline const char *StringRange::RFindNonSpace() const
 	const char *x = begin, *y = end;
 	while ((x != y) && is_space(*--y)) {}
 	return (y == end ? y : y + 1);
+}
+
+inline StringRange StringRange::StripUTF8BOM() const
+{
+	if (Size() >= 3 && begin[0] == '\xEF' && begin[1] == '\xBB' && begin[2] == '\xBF')
+		return StringRange(begin+3, end);
+	else
+		return *this;
 }
 
 inline StringRange StringRange::StripSpace() const

@@ -1,3 +1,6 @@
+// Copyright © 2008-2012 Pioneer Developers. See AUTHORS.txt for details
+// Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
+
 #include "Pi.h"
 #include "Player.h"
 #include "LuaChatForm.h"
@@ -18,7 +21,7 @@ void LuaChatForm::OnOptionClicked(int option)
 {
     SetMoney(1000000000);
 
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -45,7 +48,7 @@ void LuaChatForm::OnOptionClicked(int option)
 void LuaChatForm::OnClose() {
 	StationAdvertForm::OnClose();
 
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 	int ref = GetAdvert()->ref;
 
 	LUA_DEBUG_START(l);
@@ -123,7 +126,7 @@ bool LuaChatForm::CanSell(Equip::Type t, bool verbose) const {
 	return (GetStock(t) > 0) && DoesSell(t);
 }
 bool LuaChatForm::DoesSell(Equip::Type t) const {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -142,7 +145,7 @@ bool LuaChatForm::DoesSell(Equip::Type t) const {
 }
 
 int LuaChatForm::GetStock(Equip::Type t) const {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -161,7 +164,7 @@ int LuaChatForm::GetStock(Equip::Type t) const {
 }
 
 Sint64 LuaChatForm::GetPrice(Equip::Type t) const {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -180,7 +183,7 @@ Sint64 LuaChatForm::GetPrice(Equip::Type t) const {
 }
 
 void LuaChatForm::OnClickBuy(int t) {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -204,7 +207,7 @@ void LuaChatForm::OnClickBuy(int t) {
 }
 
 void LuaChatForm::OnClickSell(int t) {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -228,7 +231,7 @@ void LuaChatForm::OnClickSell(int t) {
 }
 
 void LuaChatForm::Bought(Equip::Type t) {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -242,7 +245,7 @@ void LuaChatForm::Bought(Equip::Type t) {
 }
 
 void LuaChatForm::Sold(Equip::Type t) {
-	lua_State *l = Pi::luaManager->GetLuaState();
+	lua_State *l = Lua::manager->GetLuaState();
 
 	LUA_DEBUG_START(l);
 
@@ -279,7 +282,7 @@ void LuaChatForm::Sold(Equip::Type t) {
  * >     -- option 0 is called when the form is first activated from the
  * >     -- bulletin board
  * >     if option == 0 then
- * >         
+ * >
  * >         form:SetTitle("Favourite colour")
  * >         form:SetMessage("What's your favourite colour?")
  * >
@@ -352,7 +355,7 @@ void LuaChatForm::Sold(Equip::Type t) {
  */
 static int l_luachatform_set_title(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	std::string title = luaL_checkstring(l, 2);
 	form->SetTitle(title);
 	return 0;
@@ -407,11 +410,10 @@ static int l_luachatform_set_title(lua_State *l)
  */
 static int l_luachatform_set_face(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 
-	if (!lua_istable(l, 2))
-		luaL_typerror(l, 2, lua_typename(l, LUA_TTABLE));
-	
+	luaL_checktype(l, 2, LUA_TTABLE);
+
 	LUA_DEBUG_START(l);
 
 	Uint32 flags = 0;
@@ -485,7 +487,7 @@ static int l_luachatform_set_face(lua_State *l)
  */
 int LuaChatForm::l_luachatform_set_message(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	std::string message = luaL_checkstring(l, 2);
 	form->SetMessage(message);
 	return 0;
@@ -514,12 +516,12 @@ int LuaChatForm::l_luachatform_set_message(lua_State *l)
  *   alpha 10
  *
  * Status:
- *   
+ *
  *   stable
  */
 int LuaChatForm::l_luachatform_add_option(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	std::string text = luaL_checkstring(l, 2);
 	int val = luaL_checkinteger(l, 3);
 	form->AddOption(text, val);
@@ -549,7 +551,7 @@ int LuaChatForm::l_luachatform_add_option(lua_State *l)
  */
 int LuaChatForm::l_luachatform_clear(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	form->Clear();
 	return 0;
 }
@@ -604,7 +606,7 @@ static inline void _check_trade_function(lua_State *l, int tableidx, const char 
  *
  *   getStock - returns the number of units of this commodity the script has
  *              available for trade
- *   
+ *
  *   getPrice - returns the price for a single unit of this commodity
  *
  *   onClickBuy - called immediately when the player clicks the "buy" button.
@@ -632,12 +634,11 @@ static inline void _check_trade_function(lua_State *l, int tableidx, const char 
  */
 int LuaChatForm::l_luachatform_add_goods_trader(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 
 	LUA_DEBUG_START(l);
 
-	if(!lua_istable(l, 2))
-		luaL_typerror(l, 2, lua_typename(l, LUA_TTABLE));
+	luaL_checktype(l, 2, LUA_TTABLE);
 
 	// check that the provided table contains all the functions we need
 	int old_top = lua_gettop(l);
@@ -692,7 +693,7 @@ int LuaChatForm::l_luachatform_add_goods_trader(lua_State *l)
  */
 int LuaChatForm::l_luachatform_close(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	form->Close();
 	return 0;
 }
@@ -714,7 +715,7 @@ int LuaChatForm::l_luachatform_close(lua_State *l)
  */
 int LuaChatForm::l_luachatform_goto_police(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	form->m_formController->ActivateForm(new StationPoliceForm(form->m_formController));
 	return 0;
 }
@@ -740,7 +741,7 @@ int LuaChatForm::l_luachatform_goto_police(lua_State *l)
  */
 static int l_luachatform_remove_advert_on_close(lua_State *l)
 {
-	LuaChatForm *form = LuaObject<LuaChatForm>::GetFromLua(1);
+	LuaChatForm *form = LuaObject<LuaChatForm>::CheckFromLua(1);
 	form->RemoveAdvertOnClose();
 	return 0;
 }
@@ -749,7 +750,7 @@ template <> const char *LuaObject<LuaChatForm>::s_type = "ChatForm";
 
 template <> void LuaObject<LuaChatForm>::RegisterClass()
 {
-	static const luaL_reg l_methods[] = {
+	static const luaL_Reg l_methods[] = {
 		{ "SetTitle",            l_luachatform_set_title                     },
 		{ "SetFace",             l_luachatform_set_face                      },
 		{ "SetMessage",          LuaChatForm::l_luachatform_set_message      },
