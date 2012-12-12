@@ -3,9 +3,60 @@ Upstream-Name: pioneer
 Source: https://github.com/tomm/pioneer.git
 
 Files: *
-Copyright: 2011 .. <..@..>
+Copyright: 2011-2012 Pioneer Developers <pioneer-dev@pioneerspacesim.net>
 License: GPL-3+
+  .
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+  .
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+  .
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  .
+  See /usr/share/common-licenses/GPL-3 for the full licence.
+
+Files: data/*
+Copyright: 2011-2012 Pioneer Developers <pioneer-dev@pioneerspacesim.net>
+License: CC-BY-SA-3
+  .
+  Creative Commons Attribution-ShareAlike 3.0 Unported License
+  .
+  You are free:
+    to Share (to copy, distribute and transmit the work) and
+    to Remix (to adapt the work) under the following conditions:
+  .
+    Attribution — You must attribute the work in the manner specified by the
+    author or licensor (but not in any way that suggests that they endorse you
+    or your use of the work).
+  .
+    Share Alike — If you alter, transform, or build upon this work, you may
+    distribute the resulting work only under the same, similar or a compatible
+    license.
+  .
+  For more information, see http://creativecommons.org/licenses/by-sa/3.0/
 
 Files: debian/*
-Copyright: 2011 Darren Salt <linux@youmustbejoking.demon.co.uk>
+Copyright: 2011-2012 Darren Salt <linux@youmustbejoking.demon.co.uk>
 License: GPL-2+
+  .
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+  .
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+  .
+  You should have received a copy of the GNU General Public License along
+  with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+  .
+  See /usr/share/common-licenses/GPL-2 for the full licence.

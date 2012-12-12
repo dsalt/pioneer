@@ -1,19 +1,19 @@
 Source: pioneer
 Section: games
 Priority: extra
-Maintainer: Darren Salt <linux@youmustbejoking.demon.co.uk>
-Build-Depends: debhelper (>= 7.0.50~), dh-autoreconf,
-	libsigc++-2.0-dev, libglew1.5-dev,
+Maintainer: Darren Salt <devspam@moreofthesa.me.uk>
+Build-Depends: dpkg-dev (>= 1.16.1~), debhelper (>= 7.0.50~), dh-autoreconf,
+	libsigc++-2.0-dev, libglew-dev,	libpng-dev,
 	libsdl1.2-dev, libvorbis-dev, libsdl-image1.2-dev,
-	liblua5.1-dev, libfreetype6-dev
-Standards-Version: 3.9.1
+	liblua5.2-dev, libfreetype6-dev
+Standards-Version: 3.9.3
 Homepage: http://pioneerspacesim.net/
 #Vcs-Git: git://git.debian.org/collab-maint/pioneer.git
 #Vcs-Browser: http://git.debian.org/?p=collab-maint/pioneer.git;a=summary
 
 Package: pioneer
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, pioneer-data (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, pioneer-data (= ${source:Version})
 Description: space adventure game, reminiscent of 'Frontier: Elite 2'
  Pioneer is a space adventure game set in the Milky Way galaxy at the turn of
  the 31st Century.
